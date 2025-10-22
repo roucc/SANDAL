@@ -16,12 +16,18 @@ export class Vertex {
 export class Mesh {
     vertices: Vertex[] = []
     triangles: [number, number, number][] = []
+    rotX = 0; rotY = 0; rotZ = 0
+
+    rotate(x: number, y: number, z: number): void {
+        this.rotX += x
+        this.rotY += y
+        this.rotZ += z
+    }
 
     createProjection(
         CW: number,
         CH: number,
         scale: number,
-        angle: number,
         worldPos = { x: 0, y: 0, z: 0 },
         screenPos = { x: CW / 2, y: CH / 2 },
     ): number[][] {
@@ -30,9 +36,9 @@ export class Mesh {
         for (let v of this.vertices) {
             let point = [[v.x], [v.y], [v.z]]
             // rotate
-            point = matMult(xMat(angle), point)
-            point = matMult(yMat(angle), point)
-            point = matMult(zMat(angle), point)
+            point = matMult(xMat(this.rotX), point)
+            point = matMult(yMat(this.rotY), point)
+            point = matMult(zMat(this.rotZ), point)
 
             // translate in world space
             point[0][0] += worldPos.x

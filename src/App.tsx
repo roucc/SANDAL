@@ -35,22 +35,24 @@ function App() {
         const cube = new Box(100, 100, 100)
         const rect = new Box(50, 100, 150)
         const sphere = new Sphere(150, 20)
-        let angle = 0
 
         const engine = () => {
             ctx.clearRect(0, 0, CW, CH)
             ctx.fillStyle = 'black'
             ctx.fillRect(0, 0, CW, CH)
 
-            angle += 0.02
+            // rotate
+            cube.rotate(0.01, 0.02, 0.05)
+            rect.rotate(0.001, 0.001, 0)
+            sphere.rotate(0.03, 0, 0)
 
-            const cubeProj = cube.createProjection(CW, CH, 2, angle, { x: -150, y: 0, z: 0 })
+            const cubeProj = cube.createProjection(CW, CH, 2, undefined, { x: CW / 4, y: CH / 2 })
             cube.drawTriangles(cubeProj, drawLine)
 
-            const rectProj = rect.createProjection(CW, CH, 2, 180 + angle, { x: 0, y: 150, z: 0 })
+            const rectProj = rect.createProjection(CW, CH, 2, undefined, { x: CW / 2, y: CH / 2 })
             cube.drawTriangles(rectProj, drawLine)
 
-            const sphereProj = sphere.createProjection(CW, CH, 1, -angle, { x: 150, y: 0, z: 0 })
+            const sphereProj = sphere.createProjection(CW, CH, 1, undefined, { x: CW / 4 * 3, y: CH / 2 })
             sphere.drawTriangles(sphereProj, drawLine)
 
             requestAnimationFrame(engine)
