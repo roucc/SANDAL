@@ -25,21 +25,18 @@ function App() {
         ]
 
         // rotation matrices:
-        // X
         const xMat = (a: number): number[][] => [
             [1, 0, 0],
             [0, Math.cos(a), -Math.sin(a)],
             [0, Math.sin(a), Math.cos(a)],
         ]
 
-        // Y
         const yMat = (a: number): number[][] => [
             [Math.cos(a), 0, Math.sin(a)],
             [0, 1, 0],
             [-Math.sin(a), 0, Math.cos(a)],
         ]
 
-        // Z
         const zMat = (a: number): number[][] => [
             [Math.cos(a), -Math.sin(a), 0],
             [Math.sin(a), Math.cos(a), 0],
@@ -74,13 +71,6 @@ function App() {
 
         }
 
-        // const drawVertex = (x: number, y: number) => {
-        //     ctx.fillStyle = 'white'
-        //     ctx.beginPath()
-        //     ctx.arc(x, y, 5, 0, Math.PI * 2)
-        //     ctx.fill()
-        // }
-
         const drawLine = (x1: number, y1: number, x2: number, y2: number) => {
             ctx.strokeStyle = 'white'
             ctx.beginPath()
@@ -102,7 +92,8 @@ function App() {
         Cube[7] = new Vertex(-50, 50, 50)
 
 
-        const Triangle: [number, number, number][] = [
+        // how the triangles join for the Cube
+        const CubeTriangles: [number, number, number][] = [
             // indices for triangles in a cube
             [0, 1, 2], [0, 2, 3],
             [4, 5, 6], [4, 6, 7],
@@ -112,6 +103,82 @@ function App() {
             [1, 2, 6], [1, 6, 5],
         ]
 
+        const Sphere: Vertex[] = []
+        const SphereTriangles: [number, number, number][] = []
+        const radius = 150
+        const segments = 20
+
+        // calculate vertex positions
+        for (let i = 0; i <= segments; i++) {
+            const theta = i * Math.PI / segments
+            for (let j = 0; j <= segments; j++) {
+                const phi = j * 2 * Math.PI / segments
+
+                const x = radius * Math.sin(theta) * Math.cos(phi)
+                const y = radius * Math.sin(theta) * Math.sin(phi)
+                const z = radius * Math.cos(theta)
+                Sphere.push(new Vertex(x, y, z))
+            }
+        }
+
+        // create sphere triangles (maths)
+        const pointsPerRow = segments + 1
+        for (let i = 0; i < segments; i++) {
+            for (let j = 0; j < segments; j++) {
+                const a = i * pointsPerRow + j
+                const b = a + 1
+                const c = a + pointsPerRow
+                // const d = c+1 // what is this for lol
+                // TODO: find the wiki theory page
+
+                SphereTriangles.push([a, b, c])
+            }
+        }
+
+        function createProjection(object: Vertex[],
+            scale: number,
+            angle: number,
+            worldPos = { x: 0, y: 0, z: 0 },
+            screenPos = { x: CW / 2, y: CH / 2 },
+        ): number[][] {
+            const proj: number[][] = [] // hold all on screen points
+
+            // loop through vertices of Cube
+            for (let v of object) {
+                let point = [[v.x], [v.y], [v.z]]
+                // rotate
+                point = matMult(xMat(angle), point)
+                point = matMult(yMat(angle), point)
+                point = matMult(zMat(angle), point)
+
+                // translate in world space
+                point[0][0] += worldPos.x
+                point[1][0] += worldPos.y
+                point[2][0] += worldPos.z
+
+                // flatten and map to screen
+                const p = matMult(pMat, point)
+                let x = p[0][0] * scale + screenPos.x
+                let y = p[1][0] * scale + screenPos.y
+
+                proj.push([x, y])
+            }
+            return proj
+        }
+
+        function drawTriangles(tri: [number, number, number][], projection: number[][]): void {
+            for (let t of tri) {
+                // create triangle points from indices
+                const p1 = projection[t[0]]
+                const p2 = projection[t[1]]
+                const p3 = projection[t[2]]
+
+                drawLine(p1[0], p1[1], p2[0], p2[1])
+                drawLine(p2[0], p2[1], p3[0], p3[1])
+                drawLine(p3[0], p3[1], p1[0], p1[1])
+            }
+        }
+
         let angle = 0
 
         const engine = () => {
@@ -119,38 +186,13 @@ function App() {
             ctx.fillStyle = 'black'
             ctx.fillRect(0, 0, CW, CH)
 
-            angle += 0.02
-            let scale = 2
+            angle += 0.05
 
-            const projected: number[][] = [] // hold all on screen points
+            let CubeProjection = createProjection(Cube, 2, angle, { x: -150, y: 0, z: 0 })
+            drawTriangles(CubeTriangles, CubeProjection)
 
-            // loop through vertices of Cube
-            for (let v of Cube) {
-                let point = [[v.x], [v.y], [v.z]]
-                // rotate
-                point = matMult(xMat(angle), point)
-                point = matMult(yMat(angle), point)
-                point = matMult(zMat(angle), point)
-
-                // flatten to 2d and center
-                const projection = matMult(pMat, point)
-                let x = projection[0][0] * scale + CW / 2
-                let y = projection[1][0] * scale + CH / 2
-
-                // drawVertex(x, y)
-                projected.push([x, y])
-            }
-
-            for (let t of Triangle) {
-                // create triangle points from indices
-                const p1 = projected[t[0]]
-                const p2 = projected[t[1]]
-                const p3 = projected[t[2]]
-
-                drawLine(p1[0], p1[1], p2[0], p2[1])
-                drawLine(p2[0], p2[1], p3[0], p3[1])
-                drawLine(p3[0], p3[1], p1[0], p1[1])
-            }
+            let SphereProjection = createProjection(Sphere, 1, -angle, { x: 150, y: 0, z: 0 })
+            drawTriangles(SphereTriangles, SphereProjection)
 
             requestAnimationFrame(engine)
         }
