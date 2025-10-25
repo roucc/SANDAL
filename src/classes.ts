@@ -1,10 +1,27 @@
-import { drawLine, mat3MulVec, pMat, xMat, yMat, zMat } from "./helpers"
-import type { Vec2, Vec3 } from "./helpers"
+import { createViewFPS, createPerspective, drawLine, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul } from "./helpers"
+import type { Vec2, Vec3, Vec4, Mat4x4 } from "./helpers"
 
 export class Vertex {
     x: number = 0; y: number = 0; z: number = 0
     constructor(x: number, y: number, z: number) {
         this.x = x; this.y = y; this.z = z
+    }
+}
+
+export class Camera {
+    eye: Vec3
+    pitch: number
+    yaw: number
+    fov: number // vertical fov, degrees
+    near: number // closest objects get displayed
+    far: number // furthest objects get displayed
+    constructor(eye: Vec3 = [0, 0, 0], pitch: number = 0, yaw: number = 0, fov: number = 60, near: number = 0.1, far: number = 10000) {
+        this.eye = eye
+        this.pitch = pitch
+        this.yaw = yaw
+        this.fov = (fov / 180) * Math.PI // convert to radians
+        this.near = near
+        this.far = far
     }
 }
 
@@ -17,25 +34,44 @@ export class Mesh {
         this.rotX += x; this.rotY += y; this.rotZ += z
     }
 
-    createProjection(
-        worldPos: Vec3 = [0, 0, 0],
+    projectToScreen(
+        worldPos: Vec4 = [0, 0, 0, 1],
+        cam: Camera,
+        CW: number, CH: number,
     ): Vec2[] {
         const proj: Vec2[] = [] // hold onscreen points
 
+        const T: Mat4x4 = [
+            [1, 0, 0, worldPos[0]],
+            [0, 1, 0, worldPos[1]],
+            [0, 0, 1, worldPos[2]],
+            [0, 0, 0, 1],
+        ];
+
+        // model->world coordinates
+        const M = mat4Mul(T, mat4Mul(zMat4(this.rotZ), mat4Mul(yMat4(this.rotY), xMat4(this.rotX))))
+        // world->view coordinates
+        const V = createViewFPS(cam)
+        // view->clip coordinates
+        const P = createPerspective(cam, CW / CH)
+        const MVP = mat4Mul(P, mat4Mul(V, M))
+
         for (let v of this.vertices) {
-            let p: Vec3 = [v.x, v.y, v.z]
+            let p = mat4MulVec(MVP, [v.x, v.y, v.z, 1])
 
-            // rotate
-            p = mat3MulVec(xMat(this.rotX), p)
-            p = mat3MulVec(yMat(this.rotY), p)
-            p = mat3MulVec(zMat(this.rotZ), p)
+            // clip->normalized device coordinates
+            // perspective divide (x,y,z) / w
+            const invW = 1 / p[3]
+            const ndcX = p[0] * invW
+            const ndcY = p[1] * invW
+            // const ncdZ = p[2] * invW
 
-            // translate in world space
-            p = [p[0] + worldPos[0], p[1] + worldPos[1], p[2] + worldPos[2]]
+            // NDC->screen coordinates
+            // NDC (−1,1) → pixels
+            const sx = (ndcX * 0.5 + 0.5) * CW
+            const sy = (-ndcY * 0.5 + 0.5) * CH // flip y, top left origin
 
-            // flatten to view space
-            const q = mat3MulVec(pMat, p)
-            proj.push([q[0], q[1]])
+            proj.push([sx, sy]);
         }
         return proj
     }
@@ -82,7 +118,7 @@ export class Box extends Mesh {
 }
 
 export class Sphere extends Mesh {
-    constructor(radius: 150, segments: 20) {
+    constructor(radius = 150, segments = 20) {
         super()
 
         // calculate vertex positions
