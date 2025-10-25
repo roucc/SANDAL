@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { Box, Sphere, Camera } from "./classes"
+import { attachKeyboardControls } from './controls'
 
 function App() {
     const cvsRef = useRef<HTMLCanvasElement | null>(null)
@@ -29,21 +30,16 @@ function App() {
         const rect = new Box(50, 100, 150)
         const sphere = new Sphere(150, 30)
 
-        // const cam = new Camera([0, 0, 3000], 0, 0)
-        const cameras = [
-            new Camera([0, 0, 3000], 0, 0),
-            new Camera([0, 0, -3000], 0, Math.PI),
-        ]
+        const cam = new Camera([0, 0, 3000], 0, 0)
 
-        let camIndex = 0
-        let cam = cameras[camIndex]
-
-        setInterval(() => {
-            camIndex = (camIndex + 1) % cameras.length
-            cam = cameras[camIndex]
-        }, 5000)
-
+        let controller = attachKeyboardControls(cam)
+        let last = performance.now()
         const engine = () => {
+            const now = performance.now()
+            const dt = (now - last) / 1000
+            last = now
+
+            controller.update(dt)
             ctx.clearRect(0, 0, CW, CH)
             ctx.fillStyle = 'black'
             ctx.fillRect(0, 0, CW, CH)
@@ -54,9 +50,9 @@ function App() {
             sphere.rotate(0.005, 0, 0)
 
             // TODO: plot furthest first
-            const cubeProj = cube.projectToScreen([-300, 0, 0, 1], cam, CW, CH);
-            const rectProj = rect.projectToScreen([0, 0, 0, 1], cam, CW, CH);
-            const sphereProj = sphere.projectToScreen([300, 0, 0, 1], cam, CW, CH);
+            const cubeProj = cube.projectToScreen([-300, 0, 0, 1], cam, CW, CH)
+            const rectProj = rect.projectToScreen([0, 0, 0, 1], cam, CW, CH)
+            const sphereProj = sphere.projectToScreen([300, 0, 0, 1], cam, CW, CH)
 
             cube.drawWireframe(ctx, cubeProj, "blue")
             rect.drawWireframe(ctx, rectProj, "red")
@@ -76,6 +72,7 @@ function App() {
 
         return () => {
             window.removeEventListener("resize", resize)
+            controller.dispose()
         }
     }, [])
 

@@ -46,7 +46,7 @@ export class Mesh {
             [0, 1, 0, worldPos[1]],
             [0, 0, 1, worldPos[2]],
             [0, 0, 0, 1],
-        ];
+        ]
 
         // model->world coordinates
         const M = mat4Mul(T, mat4Mul(zMat4(this.rotZ), mat4Mul(yMat4(this.rotY), xMat4(this.rotX))))
@@ -71,7 +71,7 @@ export class Mesh {
             const sx = (ndcX * 0.5 + 0.5) * CW
             const sy = (-ndcY * 0.5 + 0.5) * CH // flip y, top left origin
 
-            proj.push([sx, sy]);
+            proj.push([sx, sy])
         }
         return proj
     }
@@ -146,5 +146,3 @@ export class Sphere extends Mesh {
         }
     }
 }
-
-
