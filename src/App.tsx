@@ -30,7 +30,7 @@ function App() {
         const rect = new Box(50, 100, 150)
         const sphere = new Sphere(150, 30)
 
-        const cam = new Camera([0, 0, 3000], 0, 0)
+        const cam = new Camera([0, 0, 750], 0, 0)
 
         let controller = attachKeyboardControls(cam)
         let last = performance.now()
@@ -54,9 +54,13 @@ function App() {
             const rectProj = rect.projectToScreen([0, 0, 0, 1], cam, CW, CH)
             const sphereProj = sphere.projectToScreen([300, 0, 0, 1], cam, CW, CH)
 
-            cube.drawWireframe(ctx, cubeProj, "blue")
-            rect.drawWireframe(ctx, rectProj, "red")
-            sphere.drawWireframe(ctx, sphereProj, "green")
+            // cube.drawWireframe(ctx, cubeProj, "blue")
+            // rect.drawWireframe(ctx, rectProj, "red")
+            // sphere.drawWireframe(ctx, sphereProj, "green")
+
+            cube.drawSolid(ctx, cubeProj, "blue")
+            rect.drawSolid(ctx, rectProj, "red")
+            sphere.drawSolid(ctx, sphereProj, "green")
 
             setCamInfo({
                 x: cam.eye[0].toFixed(0),

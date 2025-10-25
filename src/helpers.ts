@@ -8,6 +8,17 @@ export const drawLine = (ctx: CanvasRenderingContext2D, x1: number, y1: number, 
     ctx.stroke()
 }
 
+export const fillTriangle = (ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, color: string): void => {
+    ctx.strokeStyle = color
+    ctx.fillStyle = color
+    ctx.beginPath()
+    ctx.moveTo(x1, y1)
+    ctx.lineTo(x2, y2)
+    ctx.lineTo(x3, y3)
+    ctx.fill()
+    ctx.stroke()
+}
+
 export type Vec2 = [number, number]
 export type Vec3 = [number, number, number]
 

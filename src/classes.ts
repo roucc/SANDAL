@@ -1,4 +1,4 @@
-import { createViewFPS, createPerspective, drawLine, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul } from "./helpers"
+import { createViewFPS, createPerspective, drawLine, fillTriangle, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul } from "./helpers"
 import type { Vec2, Vec3, Vec4, Mat4x4 } from "./helpers"
 
 export class Vertex {
@@ -15,7 +15,7 @@ export class Camera {
     fov: number // vertical fov, degrees
     near: number // closest objects get displayed
     far: number // furthest objects get displayed
-    constructor(eye: Vec3 = [0, 0, 0], pitch: number = 0, yaw: number = 0, fov: number = 60, near: number = 0.1, far: number = 10000) {
+    constructor(eye: Vec3 = [0, 0, 0], pitch: number = 0, yaw: number = 0, fov: number = 130, near: number = 0.1, far: number = 10000) {
         this.eye = eye
         this.pitch = pitch
         this.yaw = yaw
@@ -90,6 +90,19 @@ export class Mesh {
             drawLine(ctx, p3[0], p3[1], p1[0], p1[1], color)
         }
     }
+
+    drawSolid(
+        ctx: CanvasRenderingContext2D,
+        projection: Vec2[],
+        color: string,
+    ): void {
+        for (const t of this.triangles) {
+            const p1 = projection[t[0]]
+            const p2 = projection[t[1]]
+            const p3 = projection[t[2]]
+            fillTriangle(ctx, p1[0], p1[1], p2[0], p2[1], p3[0], p3[1], color)
+        }
+    }
 }
 
 export class Box extends Mesh {
@@ -141,6 +154,8 @@ export class Sphere extends Mesh {
                 const a = i * pointsPerRow + j
                 const b = a + 1
                 const c = a + pointsPerRow
+                const d = c + 1
+                this.triangles.push([b, c, d])
                 this.triangles.push([a, b, c])
             }
         }
