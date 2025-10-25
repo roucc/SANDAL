@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
 import { Box, Sphere, Camera } from "./classes"
 import { attachKeyboardControls } from './controls'
+import { packRGBA } from './helpers'
 
 function App() {
     const cvsRef = useRef<HTMLCanvasElement | null>(null)
@@ -16,11 +17,27 @@ function App() {
         let CW = cvs.width
         let CH = cvs.height
 
+        let depth = new Float32Array(CW * CH)
+        let img = ctx.createImageData(CW, CH)
+        let img32 = new Uint32Array(img.data.buffer)
+
+        const allocBuffers = () => {
+            depth = new Float32Array(CW * CH)
+            img = ctx.createImageData(CW, CH)
+            img32 = new Uint32Array(img.data.buffer)
+        }
+
+        const clearBuffers = () => {
+            depth.fill(Infinity)
+            img32.fill(0xFF000000)
+        }
+
         const resize = () => {
             cvs.width = window.innerWidth
             cvs.height = window.innerHeight
             CW = cvs.width
             CH = cvs.height
+            allocBuffers()
         }
         resize()
         window.addEventListener("resize", resize)
@@ -35,33 +52,32 @@ function App() {
         let controller = attachKeyboardControls(cam)
         let last = performance.now()
         const engine = () => {
+            clearBuffers()
+
             const now = performance.now()
             const dt = (now - last) / 1000
             last = now
-
             controller.update(dt)
-            ctx.clearRect(0, 0, CW, CH)
-            ctx.fillStyle = 'black'
-            ctx.fillRect(0, 0, CW, CH)
 
             // rotate
             cube.rotate(0.01, 0.02, 0.05)
             rect.rotate(0.001, 0.001, 0)
             sphere.rotate(0.005, 0, 0)
 
-            // TODO: plot furthest first
             const cubeProj = cube.projectToScreen([-300, 0, 0, 1], cam, CW, CH)
             const rectProj = rect.projectToScreen([0, 0, 0, 1], cam, CW, CH)
             const sphereProj = sphere.projectToScreen([300, 0, 0, 1], cam, CW, CH)
 
-            // cube.drawWireframe(ctx, cubeProj, "blue")
-            // rect.drawWireframe(ctx, rectProj, "red")
-            // sphere.drawWireframe(ctx, sphereProj, "green")
+            const blue = packRGBA(0, 0, 255)
+            const red = packRGBA(255, 0, 0)
+            const green = packRGBA(0, 255, 0)
 
-            cube.drawSolid(ctx, cubeProj, "blue")
-            rect.drawSolid(ctx, rectProj, "red")
-            sphere.drawSolid(ctx, sphereProj, "green")
+            cube.drawSolidZToImage(cubeProj, blue, img32, depth, CW, CH)
+            rect.drawSolidZToImage(rectProj, red, img32, depth, CW, CH)
+            sphere.drawSolidZToImage(sphereProj, green, img32, depth, CW, CH)
 
+            // draw everything in one call (GPU!)
+            ctx.putImageData(img, 0, 0)
             setCamInfo({
                 x: cam.eye[0].toFixed(0),
                 y: cam.eye[1].toFixed(0),

@@ -1,4 +1,4 @@
-import { createViewFPS, createPerspective, drawLine, fillTriangle, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul } from "./helpers"
+import { drawTriZToImage, createViewFPS, createPerspective, drawLine, fillTriangle, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul } from "./helpers"
 import type { Vec2, Vec3, Vec4, Mat4x4 } from "./helpers"
 
 export class Vertex {
@@ -38,8 +38,8 @@ export class Mesh {
         worldPos: Vec4 = [0, 0, 0, 1],
         cam: Camera,
         CW: number, CH: number,
-    ): Vec2[] {
-        const proj: Vec2[] = [] // hold onscreen points
+    ): Vec3[] {
+        const proj: Vec3[] = [] // hold onscreen points + depth
 
         const T: Mat4x4 = [
             [1, 0, 0, worldPos[0]],
@@ -52,26 +52,36 @@ export class Mesh {
         const M = mat4Mul(T, mat4Mul(zMat4(this.rotZ), mat4Mul(yMat4(this.rotY), xMat4(this.rotX))))
         // world->view coordinates
         const V = createViewFPS(cam)
+        const MV = mat4Mul(V, M)
         // view->clip coordinates
         const P = createPerspective(cam, CW / CH)
-        const MVP = mat4Mul(P, mat4Mul(V, M))
+        const MVP = mat4Mul(P, MV)
+
+        // lighting done in view space
 
         for (let v of this.vertices) {
+            // TODO: should compute per-vertex normals for lighting
+
+            // model->world->view->clip
             let p = mat4MulVec(MVP, [v.x, v.y, v.z, 1])
 
             // clip->normalized device coordinates
+            // p.z < -p.w → entirely behind near → drop.
+            // p.z > p.w → entirely beyond far → drop.
+
             // perspective divide (x,y,z) / w
             const invW = 1 / p[3]
             const ndcX = p[0] * invW
             const ndcY = p[1] * invW
-            // const ncdZ = p[2] * invW
 
             // NDC->screen coordinates
             // NDC (−1,1) → pixels
             const sx = (ndcX * 0.5 + 0.5) * CW
             const sy = (-ndcY * 0.5 + 0.5) * CH // flip y, top left origin
+            const vpos = mat4MulVec(MV, [v.x, v.y, v.z, 1])
+            const zView = vpos[2]
 
-            proj.push([sx, sy])
+            proj.push([sx, sy, zView])
         }
         return proj
     }
@@ -93,7 +103,7 @@ export class Mesh {
 
     drawSolid(
         ctx: CanvasRenderingContext2D,
-        projection: Vec2[],
+        projection: Vec3[],
         color: string,
     ): void {
         for (const t of this.triangles) {
@@ -101,6 +111,19 @@ export class Mesh {
             const p2 = projection[t[1]]
             const p3 = projection[t[2]]
             fillTriangle(ctx, p1[0], p1[1], p2[0], p2[1], p3[0], p3[1], color)
+        }
+    }
+
+    drawSolidZToImage(
+        projection: [number, number, number][],
+        color32: number,
+        img32: Uint32Array, depth: Float32Array, W: number, H: number
+    ) {
+        for (const t of this.triangles) {
+            const p1 = projection[t[0]]
+            const p2 = projection[t[1]]
+            const p3 = projection[t[2]]
+            drawTriZToImage(img32, depth, W, H, p1, p2, p3, color32)
         }
     }
 }
@@ -120,12 +143,18 @@ export class Box extends Mesh {
         ]
 
         this.triangles = [
-            [0, 1, 2], [0, 2, 3],
+            // back  (-z)
+            [1, 0, 3], [1, 3, 2],
+            // front (+z)
             [4, 5, 6], [4, 6, 7],
+            // left  (-x)
+            [0, 4, 7], [0, 7, 3],
+            // right (+x)
+            [5, 1, 2], [5, 2, 6],
+            // top   (+y)
+            [3, 7, 6], [3, 6, 2],
+            // bot   (-y)
             [0, 1, 5], [0, 5, 4],
-            [3, 2, 6], [3, 6, 7],
-            [0, 3, 7], [0, 7, 4],
-            [1, 2, 6], [1, 6, 5],
         ]
     }
 }
@@ -155,8 +184,8 @@ export class Sphere extends Mesh {
                 const b = a + 1
                 const c = a + pointsPerRow
                 const d = c + 1
-                this.triangles.push([b, c, d])
-                this.triangles.push([a, b, c])
+                this.triangles.push([a, b, d])
+                this.triangles.push([a, d, c])
             }
         }
     }

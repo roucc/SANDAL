@@ -19,6 +19,49 @@ export const fillTriangle = (ctx: CanvasRenderingContext2D, x1: number, y1: numb
     ctx.stroke()
 }
 
+export const packRGBA = (r: number, g: number, b: number, a = 255) =>
+    (a << 24) | (b << 16) | (g << 8) | r
+
+// test whether a pixel is in a triangle
+const edge = (ax: number, ay: number, bx: number, by: number, px: number, py: number) =>
+    (px - ax) * (by - ay) - (py - ay) * (bx - ax)
+
+export function drawTriZToImage(
+    img32: Uint32Array, depth: Float32Array, W: number, H: number,
+    a: Vec3, b: Vec3, c: Vec3, color32: number
+) {
+    // back-face culling in screen space
+    const FRONT_CCW = false // counter clockwise winding
+    const area = edge(a[0], a[1], b[0], b[1], c[0], c[1])
+    if ((FRONT_CCW && area <= 0) || (!FRONT_CCW && area >= 0)) return
+
+    // triangles screen space bounding box
+    const minX = Math.max(0, Math.floor(Math.min(a[0], b[0], c[0])))
+    const maxX = Math.min(W - 1, Math.ceil(Math.max(a[0], b[0], c[0])))
+    const minY = Math.max(0, Math.floor(Math.min(a[1], b[1], c[1])))
+    const maxY = Math.min(H - 1, Math.ceil(Math.max(a[1], b[1], c[1])))
+
+    for (let y = minY; y <= maxY; y++) {
+        const py = y + 0.5
+        for (let x = minX; x <= maxX; x++) {
+            const px = x + 0.5
+            const w0 = edge(b[0], b[1], c[0], c[1], px, py)
+            const w1 = edge(c[0], c[1], a[0], a[1], px, py)
+            const w2 = edge(a[0], a[1], b[0], b[1], px, py)
+            if (w0 <= 0 && w1 <= 0 && w2 <= 0) {
+                const invA = 1 / -area
+                const l0 = w0 * invA, l1 = w1 * invA, l2 = w2 * invA
+                const z = l0 * a[2] + l1 * b[2] + l2 * c[2]
+                const idx = y * W + x
+                if (z < depth[idx]) {
+                    depth[idx] = z
+                    img32[idx] = color32
+                }
+            }
+        }
+    }
+}
+
 export type Vec2 = [number, number]
 export type Vec3 = [number, number, number]
 
@@ -38,7 +81,7 @@ export function createViewFPS(cam: Camera): Mat4x4 {
 
     const right: Vec3 = [cosY, 0, -sinY]
     const up: Vec3 = [sinY * sinP, cosP, cosY * sinP]
-    const forward: Vec3 = [sinY * cosP, sinP, cosP * cosY] // flip sign to make LH?
+    const forward: Vec3 = [sinY * cosP, -sinP, cosP * cosY]
 
     return [
         [right[0], right[1], right[2], -dot3(right, cam.eye)],
