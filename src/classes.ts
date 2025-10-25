@@ -1,16 +1,11 @@
-import { matMult, pMat, xMat, yMat, zMat } from "./helpers"
+import { drawLine, mat3MulVec, pMat, xMat, yMat, zMat } from "./helpers"
+import type { Vec2, Vec3 } from "./helpers"
 
 export class Vertex {
-    x: number = 0
-    y: number = 0
-    z: number = 0
-
+    x: number = 0; y: number = 0; z: number = 0
     constructor(x: number, y: number, z: number) {
-        this.x = x
-        this.y = y
-        this.z = z
+        this.x = x; this.y = y; this.z = z
     }
-
 }
 
 export class Mesh {
@@ -19,59 +14,46 @@ export class Mesh {
     rotX = 0; rotY = 0; rotZ = 0
 
     rotate(x: number, y: number, z: number): void {
-        this.rotX += x
-        this.rotY += y
-        this.rotZ += z
+        this.rotX += x; this.rotY += y; this.rotZ += z
     }
 
     createProjection(
-        CW: number,
-        CH: number,
-        scale: number,
-        worldPos = { x: 0, y: 0, z: 0 },
-        screenPos = { x: CW / 2, y: CH / 2 },
-    ): number[][] {
-        const proj: number[][] = [] // hold all on screen points
+        worldPos: Vec3 = [0, 0, 0],
+    ): Vec2[] {
+        const proj: Vec2[] = [] // hold onscreen points
 
         for (let v of this.vertices) {
-            let point = [[v.x], [v.y], [v.z]]
+            let p: Vec3 = [v.x, v.y, v.z]
+
             // rotate
-            point = matMult(xMat(this.rotX), point)
-            point = matMult(yMat(this.rotY), point)
-            point = matMult(zMat(this.rotZ), point)
+            p = mat3MulVec(xMat(this.rotX), p)
+            p = mat3MulVec(yMat(this.rotY), p)
+            p = mat3MulVec(zMat(this.rotZ), p)
 
             // translate in world space
-            point[0][0] += worldPos.x
-            point[1][0] += worldPos.y
-            point[2][0] += worldPos.z
+            p = [p[0] + worldPos[0], p[1] + worldPos[1], p[2] + worldPos[2]]
 
-            // flatten and map to screen
-            const p = matMult(pMat, point)
-            let x = p[0][0] * scale + screenPos.x
-            let y = p[1][0] * scale + screenPos.y
-
-            proj.push([x, y])
+            // flatten to view space
+            const q = mat3MulVec(pMat, p)
+            proj.push([q[0], q[1]])
         }
         return proj
     }
 
-
-    drawTriangles(
-        projection: number[][],
-        drawLine: (x1: number, y1: number, x2: number, y2: number) => void,
+    drawWireframe(
+        ctx: CanvasRenderingContext2D,
+        projection: Vec2[],
+        color: string,
     ): void {
-        for (let t of this.triangles) {
-            // create triangle points from indices
+        for (const t of this.triangles) {
             const p1 = projection[t[0]]
             const p2 = projection[t[1]]
             const p3 = projection[t[2]]
-
-            drawLine(p1[0], p1[1], p2[0], p2[1])
-            drawLine(p2[0], p2[1], p3[0], p3[1])
-            drawLine(p3[0], p3[1], p1[0], p1[1])
+            drawLine(ctx, p1[0], p1[1], p2[0], p2[1], color)
+            drawLine(ctx, p2[0], p2[1], p3[0], p3[1], color)
+            drawLine(ctx, p3[0], p3[1], p1[0], p1[1], color)
         }
     }
-
 }
 
 export class Box extends Mesh {
@@ -116,19 +98,14 @@ export class Sphere extends Mesh {
             }
         }
 
-        // create sphere triangles (maths)
+        // create sphere triangles
         const pointsPerRow = segments + 1
         for (let i = 0; i < segments; i++) {
             for (let j = 0; j < segments; j++) {
                 const a = i * pointsPerRow + j
                 const b = a + 1
                 const c = a + pointsPerRow
-                const d = c + 1
-                // TODO: find the wiki theory page
-
-                // two triangles per quad
-                this.triangles.push([a, b, d])
-                this.triangles.push([a, d, c])
+                this.triangles.push([a, b, c])
             }
         }
     }

@@ -23,14 +23,6 @@ function App() {
         resize()
         window.addEventListener("resize", resize)
 
-        const drawLine = (x1: number, y1: number, x2: number, y2: number): void => {
-            ctx.strokeStyle = "white"
-            ctx.beginPath()
-            ctx.moveTo(x1, y1)
-            ctx.lineTo(x2, y2)
-            ctx.stroke()
-        }
-
         // setup scene
         const cube = new Box(100, 100, 100)
         const rect = new Box(50, 100, 150)
@@ -44,16 +36,16 @@ function App() {
             // rotate
             cube.rotate(0.01, 0.02, 0.05)
             rect.rotate(0.001, 0.001, 0)
-            sphere.rotate(0.03, 0, 0)
+            sphere.rotate(0.005, 0, 0)
 
-            const cubeProj = cube.createProjection(CW, CH, 2, undefined, { x: CW / 4, y: CH / 2 })
-            cube.drawTriangles(cubeProj, drawLine)
+            const cubeProj = cube.createProjection([CW / 4, CH / 2, 0])
+            cube.drawWireframe(ctx, cubeProj, "blue")
 
-            const rectProj = rect.createProjection(CW, CH, 2, undefined, { x: CW / 2, y: CH / 2 })
-            cube.drawTriangles(rectProj, drawLine)
+            const rectProj = rect.createProjection([CW / 2, CH / 2, 0])
+            rect.drawWireframe(ctx, rectProj, "red")
 
-            const sphereProj = sphere.createProjection(CW, CH, 1, undefined, { x: CW / 4 * 3, y: CH / 2 })
-            sphere.drawTriangles(sphereProj, drawLine)
+            const sphereProj = sphere.createProjection([3 * CW / 4, CH / 2, 0])
+            sphere.drawWireframe(ctx, sphereProj, "green")
 
             requestAnimationFrame(engine)
         }
