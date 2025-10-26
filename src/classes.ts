@@ -1,5 +1,5 @@
-import { drawTriZToImage, createViewFPS, createPerspective, drawLine, fillTriangle, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul } from "./helpers"
-import type { Vec2, Vec3, Vec4, Mat4x4 } from "./helpers"
+import { clipped, drawTriZToImage, createViewFPS, createPerspective, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul } from "./helpers"
+import type { Vec3, Vec4, Mat4x4 } from "./helpers"
 
 export class Vertex {
     x: number = 0; y: number = 0; z: number = 0
@@ -15,7 +15,7 @@ export class Camera {
     fov: number // vertical fov, degrees
     near: number // closest objects get displayed
     far: number // furthest objects get displayed
-    constructor(eye: Vec3 = [0, 0, 0], pitch: number = 0, yaw: number = 0, fov: number = 130, near: number = 0.1, far: number = 10000) {
+    constructor(eye: Vec3 = [0, 0, 0], pitch: number = 0, yaw: number = 0, fov: number = 60, near: number = 0.1, far: number = 10000) {
         this.eye = eye
         this.pitch = pitch
         this.yaw = yaw
@@ -27,8 +27,9 @@ export class Camera {
 
 export class Mesh {
     vertices: Vertex[] = []
-    triangles: [number, number, number][] = []
+    triangles: Vec3[] = []
     rotX = 0; rotY = 0; rotZ = 0
+    pixels: Vec3[] = [] // onscreen points xy + depth, later add colour
 
     rotate(x: number, y: number, z: number): void {
         this.rotX += x; this.rotY += y; this.rotZ += z
@@ -38,9 +39,8 @@ export class Mesh {
         worldPos: Vec4 = [0, 0, 0, 1],
         cam: Camera,
         CW: number, CH: number,
-    ): Vec3[] {
-        const proj: Vec3[] = [] // hold onscreen points + depth
-
+    ): void {
+        this.pixels = []
         const T: Mat4x4 = [
             [1, 0, 0, worldPos[0]],
             [0, 1, 0, worldPos[1]],
@@ -63,14 +63,18 @@ export class Mesh {
             // TODO: should compute per-vertex normals for lighting
 
             // model->world->view->clip
-            let p = mat4MulVec(MVP, [v.x, v.y, v.z, 1])
+            const p = mat4MulVec(MVP, [v.x, v.y, v.z, 1])
+            const w = p[3]
+
+            const clip = clipped(p)
+            if (clip) {
+                this.pixels.push([Infinity, Infinity, Infinity])
+                continue
+            }
 
             // clip->normalized device coordinates
-            // p.z < -p.w → entirely behind near → drop.
-            // p.z > p.w → entirely beyond far → drop.
-
             // perspective divide (x,y,z) / w
-            const invW = 1 / p[3]
+            const invW = 1 / w
             const ndcX = p[0] * invW
             const ndcY = p[1] * invW
 
@@ -78,51 +82,27 @@ export class Mesh {
             // NDC (−1,1) → pixels
             const sx = (ndcX * 0.5 + 0.5) * CW
             const sy = (-ndcY * 0.5 + 0.5) * CH // flip y, top left origin
+
+            // store z in view space for depth
             const vpos = mat4MulVec(MV, [v.x, v.y, v.z, 1])
             const zView = vpos[2]
 
-            proj.push([sx, sy, zView])
-        }
-        return proj
-    }
-
-    drawWireframe(
-        ctx: CanvasRenderingContext2D,
-        projection: Vec2[],
-        color: string,
-    ): void {
-        for (const t of this.triangles) {
-            const p1 = projection[t[0]]
-            const p2 = projection[t[1]]
-            const p3 = projection[t[2]]
-            drawLine(ctx, p1[0], p1[1], p2[0], p2[1], color)
-            drawLine(ctx, p2[0], p2[1], p3[0], p3[1], color)
-            drawLine(ctx, p3[0], p3[1], p1[0], p1[1], color)
+            this.pixels.push([sx, sy, zView])
         }
     }
 
-    drawSolid(
-        ctx: CanvasRenderingContext2D,
-        projection: Vec3[],
-        color: string,
-    ): void {
-        for (const t of this.triangles) {
-            const p1 = projection[t[0]]
-            const p2 = projection[t[1]]
-            const p3 = projection[t[2]]
-            fillTriangle(ctx, p1[0], p1[1], p2[0], p2[1], p3[0], p3[1], color)
-        }
-    }
-
-    drawSolidZToImage(
-        projection: [number, number, number][],
+    drawSolidToImage(
         color32: number,
         img32: Uint32Array, depth: Float32Array, W: number, H: number
     ) {
         for (const t of this.triangles) {
-            const p1 = projection[t[0]]
-            const p2 = projection[t[1]]
-            const p3 = projection[t[2]]
+            const p1 = this.pixels[t[0]]
+            const p2 = this.pixels[t[1]]
+            const p3 = this.pixels[t[2]]
+
+            // skip if clipped
+            if (!Number.isFinite(p1[0]) || !Number.isFinite(p2[0]) || !Number.isFinite(p3[0])) continue
+
             drawTriZToImage(img32, depth, W, H, p1, p2, p3, color32)
         }
     }

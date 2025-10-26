@@ -1,22 +1,11 @@
 import { Camera } from "./classes"
 
-export const drawLine = (ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, color: string): void => {
-    ctx.strokeStyle = color
-    ctx.beginPath()
-    ctx.moveTo(x1, y1)
-    ctx.lineTo(x2, y2)
-    ctx.stroke()
-}
-
-export const fillTriangle = (ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, color: string): void => {
-    ctx.strokeStyle = color
-    ctx.fillStyle = color
-    ctx.beginPath()
-    ctx.moveTo(x1, y1)
-    ctx.lineTo(x2, y2)
-    ctx.lineTo(x3, y3)
-    ctx.fill()
-    ctx.stroke()
+export function clipped(p: Vec4) {
+    const [x, y, z, u] = p
+    const w = u + 100 // epic bodge to stop clipping on screen
+    // sometimes makes being in/close to objects weird
+    // TODO: implement actual culling techniques
+    return (w <= 1e-6) || x < -w || x > w || y < -w || y > w || z < -w || z > w
 }
 
 export const packRGBA = (r: number, g: number, b: number, a = 255) =>
@@ -92,13 +81,15 @@ export function createViewFPS(cam: Camera): Mat4x4 {
 }
 
 export function createPerspective(cam: Camera, aspect: number): Mat4x4 {
-    const f = 1 / Math.tan(cam.fov / 2); // cam.fov in radians (vertical)
+    const f = 1 / Math.tan(cam.fov / 2) // vertical fov
+    const n = cam.near, fa = cam.far
+    // Column-vector convention (p = M * v), RH, NDC z in [-1,1]
     return [
         [f / aspect, 0, 0, 0],
         [0, f, 0, 0],
-        [0, 0, -(cam.far + cam.near) / (cam.far - cam.near), -1],
-        [0, 0, -(2 * cam.far * cam.near) / (cam.far - cam.near), 0],
-    ];
+        [0, 0, (fa + n) / (n - fa), (2 * fa * n) / (n - fa)],
+        [0, 0, -1, 0],
+    ]
 }
 
 export const mat4Mul = (a: Mat4x4, b: Mat4x4): Mat4x4 => ([

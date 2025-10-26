@@ -64,20 +64,22 @@ function App() {
             rect.rotate(0.001, 0.001, 0)
             sphere.rotate(0.005, 0, 0)
 
-            const cubeProj = cube.projectToScreen([-300, 0, 0, 1], cam, CW, CH)
-            const rectProj = rect.projectToScreen([0, 0, 0, 1], cam, CW, CH)
-            const sphereProj = sphere.projectToScreen([300, 0, 0, 1], cam, CW, CH)
+            cube.projectToScreen([-300, 0, 0, 1], cam, CW, CH)
+            rect.projectToScreen([0, 0, 0, 1], cam, CW, CH)
+            sphere.projectToScreen([300, 0, 0, 1], cam, CW, CH)
 
             const blue = packRGBA(0, 0, 255)
             const red = packRGBA(255, 0, 0)
             const green = packRGBA(0, 255, 0)
 
-            cube.drawSolidZToImage(cubeProj, blue, img32, depth, CW, CH)
-            rect.drawSolidZToImage(rectProj, red, img32, depth, CW, CH)
-            sphere.drawSolidZToImage(sphereProj, green, img32, depth, CW, CH)
+            cube.drawSolidToImage(blue, img32, depth, CW, CH)
+            rect.drawSolidToImage(red, img32, depth, CW, CH)
+            sphere.drawSolidToImage(green, img32, depth, CW, CH)
 
-            // draw everything in one call (GPU!)
+
+            // draw everything in one call
             ctx.putImageData(img, 0, 0)
+
             setCamInfo({
                 x: cam.eye[0].toFixed(0),
                 y: cam.eye[1].toFixed(0),
