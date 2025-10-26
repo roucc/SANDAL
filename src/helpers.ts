@@ -42,14 +42,31 @@ export function rasterizeTriangle(
     a: Vec3, b: Vec3, c: Vec3,
     getColor: ((l0: number, l1: number, l2: number) => number) | number // callback or single colour
 ) {
-    // back-face culling in screen space
-    const FRONT_CCW = false // counter clockwise winding
-    const edge = (ax: number, ay: number, bx: number, by: number, px: number, py: number) =>
-        (px - ax) * (by - ay) - (py - ay) * (bx - ax)
+    const edge = (ax: number, ay: number, bx: number, by: number, px: number, py: number) => (px - ax) * (by - ay) - (py - ay) * (bx - ax)
     const area = edge(a[0], a[1], b[0], b[1], c[0], c[1])
-    if ((FRONT_CCW && area <= 0) || (!FRONT_CCW && area >= 0)) return
+    if (area === 0) return
 
-    // triangles screen space bounding box
+    // cull triangles facing away from camera
+    const FRONT_CCW = false
+    if ((FRONT_CCW && area < 0) || (!FRONT_CCW && area > 0)) return
+
+    const s = area > 0 ? 1 : -1
+    const A = s * area
+
+    // top-left test helpers
+    const isTopLeft = (ax: number, ay: number, bx: number, by: number) => (by > ay) || (by === ay && bx < ax)
+
+    // edge vectors for each side
+    const e0x = b[0] - c[0], e0y = b[1] - c[1]
+    const e1x = c[0] - a[0], e1y = c[1] - a[1]
+    const e2x = a[0] - b[0], e2y = a[1] - b[1]
+
+    // bias for top left edges
+    const bias0 = isTopLeft(b[0], b[1], c[0], c[1]) ? 0 : -1
+    const bias1 = isTopLeft(c[0], c[1], a[0], a[1]) ? 0 : -1
+    const bias2 = isTopLeft(a[0], a[1], b[0], b[1]) ? 0 : -1
+
+    // screen space bounding box
     const minX = Math.max(0, Math.floor(Math.min(a[0], b[0], c[0])))
     const maxX = Math.min(W - 1, Math.ceil(Math.max(a[0], b[0], c[0])))
     const minY = Math.max(0, Math.floor(Math.min(a[1], b[1], c[1])))
@@ -59,20 +76,28 @@ export function rasterizeTriangle(
         const py = y + 0.5
         for (let x = minX; x <= maxX; x++) {
             const px = x + 0.5
-            const w0 = edge(b[0], b[1], c[0], c[1], px, py)
-            const w1 = edge(c[0], c[1], a[0], a[1], px, py)
-            const w2 = edge(a[0], a[1], b[0], b[1], px, py)
-            if (w0 <= 0 && w1 <= 0 && w2 <= 0) {
-                const invA = 1 / -area
-                const l0 = w0 * invA, l1 = w1 * invA, l2 = w2 * invA
-                const z = l0 * a[2] + l1 * b[2] + l2 * c[2]
-                const idx = y * W + x
-                if (z < depth[idx]) {
-                    depth[idx] = z
-                    img32[idx] = typeof getColor === "function"
-                        ? getColor(l0, l1, l2) // per pixel shading
-                        : getColor // flat shading
-                }
+
+            // unnormalized barycentric weights
+            let w0 = s * edge(b[0], b[1], c[0], c[1], px, py)
+            let w1 = s * edge(c[0], c[1], a[0], a[1], px, py)
+            let w2 = s * edge(a[0], a[1], b[0], b[1], px, py)
+
+            // top-left rule ensures triangles edges only filled once
+            if (w0 < 0 || (w0 === 0 && ((px - b[0]) * e0y - (py - b[1]) * e0x) < bias0)) continue
+            if (w1 < 0 || (w1 === 0 && ((px - c[0]) * e1y - (py - c[1]) * e1x) < bias1)) continue
+            if (w2 < 0 || (w2 === 0 && ((px - a[0]) * e2y - (py - a[1]) * e2x) < bias2)) continue
+
+            // normalize edge values (sum to 1)
+            const invA = 1 / A
+            const l0 = w0 * invA, l1 = w1 * invA, l2 = w2 * invA
+
+            // interpolated z in screen space
+            const z = l0 * a[2] + l1 * b[2] + l2 * c[2] // NDC z
+            const idx = y * W + x
+
+            if (z < depth[idx]) {
+                depth[idx] = z
+                img32[idx] = typeof getColor === "function" ? getColor(l0, l1, l2) : getColor;
             }
         }
     }

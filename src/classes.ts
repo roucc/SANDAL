@@ -1,4 +1,4 @@
-import { clipped, rasterizeTriangle, createViewFPS, createPerspective, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul } from "./helpers"
+import { clipped, rasterizeTriangle, createViewFPS, normalize, createPerspective, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul } from "./helpers"
 import type { Vec3, Vec4, Mat4x4, Color32, RGBA } from "./helpers"
 import type { Shader } from "./shaders";
 
@@ -32,9 +32,32 @@ export class Mesh {
     rotX = 0; rotY = 0; rotZ = 0
     pixels: Vec3[] = [] // onscreen points xy + depth, later add colour
     viewPos: Vec3[] = [] // xyz in view space
+    normals: Vec3[] = [] // model space vertex normals
+    viewNorms: Vec3[] = [] // view space vertex normals
 
     rotate(x: number, y: number, z: number): void {
         this.rotX += x; this.rotY += y; this.rotZ += z
+    }
+
+    buildVertexNormals() {
+        this.normals = Array(this.vertices.length).fill(0).map(_ => [0, 0, 0] as Vec3)
+        for (const t of this.triangles) {
+            const a = this.vertices[t[0]], b = this.vertices[t[1]], c = this.vertices[t[2]]
+            const ab: Vec3 = [b.x - a.x, b.y - a.y, b.z - a.z]
+            const ac: Vec3 = [c.x - a.x, c.y - a.y, c.z - a.z]
+
+            const n: Vec3 = [
+                ab[1] * ac[2] - ab[2] * ac[1],
+                ab[2] * ac[0] - ab[0] * ac[2],
+                ab[0] * ac[1] - ab[1] * ac[0],
+            ]
+            for (const i of t) {
+                this.normals[i][0] += n[0]
+                this.normals[i][1] += n[1]
+                this.normals[i][2] += n[2]
+            }
+        }
+        this.normals = this.normals.map(n => normalize(n))
     }
 
     projectToScreen(
@@ -44,6 +67,7 @@ export class Mesh {
     ): void {
         this.pixels = []
         this.viewPos = []
+        this.viewNorms = []
 
         const T: Mat4x4 = [
             [1, 0, 0, worldPos[0]],
@@ -63,7 +87,9 @@ export class Mesh {
 
         // lighting done in view space
 
-        for (let v of this.vertices) {
+        for (let i = 0; i < this.vertices.length; i++) {
+            const v = this.vertices[i]
+
             // model->world->view->clip
             const p = mat4MulVec(MVP, [v.x, v.y, v.z, 1])
             const w = p[3]
@@ -72,6 +98,7 @@ export class Mesh {
             if (clip) {
                 this.pixels.push([Infinity, Infinity, Infinity])
                 this.viewPos.push([Infinity, Infinity, Infinity])
+                this.viewNorms.push([0, 0, 0])
                 continue
             }
 
@@ -80,6 +107,7 @@ export class Mesh {
             const invW = 1 / w
             const ndcX = p[0] * invW
             const ndcY = p[1] * invW
+            const ndcZ = p[2] * invW
 
             // NDC->screen coordinates
             // NDC (−1,1) → pixels
@@ -89,8 +117,12 @@ export class Mesh {
             // calculate view space positions
             const vpos = mat4MulVec(MV, [v.x, v.y, v.z, 1])
 
-            this.pixels.push([sx, sy, vpos[2]]) // store z for depth buffer
+            this.pixels.push([sx, sy, ndcZ]) // store z for depth buffer
             this.viewPos.push([vpos[0], vpos[1], vpos[2]])
+
+            const n = this.normals[i]
+            const vn = mat4MulVec(MV, [n[0], n[1], n[2], 0]) // view normal (w=0)
+            this.viewNorms.push(normalize([vn[0], vn[1], vn[2]]))
         }
     }
 
@@ -103,6 +135,7 @@ export class Mesh {
         shader: Shader,
     ) {
         for (const t of this.triangles) {
+            const n1 = this.viewNorms[t[0]], n2 = this.viewNorms[t[1]], n3 = this.viewNorms[t[2]]
             const p1 = this.pixels[t[0]]; const p2 = this.pixels[t[1]]; const p3 = this.pixels[t[2]]
             // skip if clipped
             if (!Number.isFinite(p1[0]) || !Number.isFinite(p2[0]) || !Number.isFinite(p3[0])) continue
@@ -111,6 +144,7 @@ export class Mesh {
 
             // Use pixel or flat shading automatically
             if (shader.shadePixel) {
+                if (!n1 || !n2 || !n3) continue
                 const getColor = (l0: number, l1: number, l2: number): Color32 => {
                     return shader.shadePixel!(
                         [v1, v2, v3], // vertex view pos
@@ -119,6 +153,7 @@ export class Mesh {
                         color,
                         ambient,
                         albedo,
+                        [n1, n2, n3],
                     )
                 }
                 rasterizeTriangle(img32, depth, W, H, p1, p2, p3, getColor)

@@ -8,7 +8,8 @@ export interface Shader {
         viewLight: Vec4,
         baseColor: RGBA,
         ambient: number,
-        albedo: number
+        albedo: number,
+        viewNorms: [Vec3, Vec3, Vec3],
     ): Color32
 
     shadeFlat?(
@@ -20,32 +21,55 @@ export interface Shader {
     ): Color32
 }
 
+export class GouraudShader implements Shader {
+    shadePixel(viewPos: Vec3[], bary: [number, number, number], viewLight: Vec4, color: RGBA, ambient: number, albedo: number, viewNorms: Vec3[]): number {
+        const c = gouraud(viewPos, bary, viewLight, color, ambient, albedo, viewNorms)
+        return packRGBA(c)
+    }
+}
 
-export function lambert(
+function gouraud(
     viewPos: Vec3[],
+    bary: [number, number, number],
     viewLight: Vec4,
     color: RGBA,
-    ambient: number, // ambient light
-    albedo: number, // surface reflectiveness
+    ambient: number,
+    albedo: number,
+    viewNorms: Vec3[],
 ): RGBA {
-    const centroid = averageVec3(viewPos[0], viewPos[1], viewPos[2])
-    const N = normalVec3(viewPos[0], viewPos[1], viewPos[2])
-    const L: Vec3 = [
-        viewLight[0] - centroid[0],
-        viewLight[1] - centroid[1],
-        viewLight[2] - centroid[2],
-    ]
+    // calculate each each vertex diffuse
+    const L0 = normalize([
+        -viewLight[0] + viewPos[0][0],
+        -viewLight[1] + viewPos[0][1],
+        -viewLight[2] + viewPos[0][2],
+    ])
+    const D0 = Math.max(0, dot3(viewNorms[0], L0));
 
-    // normalize to get dot [0,1]
-    const Nn = normalize(N)
-    const Ln = normalize(L)
-    const dot = Math.max(0, dot3(Nn, Ln))
+    const L1 = normalize([
+        -viewLight[0] + viewPos[1][0],
+        -viewLight[1] + viewPos[1][1],
+        -viewLight[2] + viewPos[1][2],
+    ])
+    const D1 = Math.max(0, dot3(viewNorms[1], L1));
+
+    const L2 = normalize([
+        -viewLight[0] + viewPos[2][0],
+        -viewLight[1] + viewPos[2][1],
+        -viewLight[2] + viewPos[2][2],
+    ])
+    const D2 = Math.max(0, dot3(viewNorms[2], L2));
+
+
+    // apply weighting to each diffuse
+    const d = bary[0] * D0 + bary[1] * D1 + bary[2] * D2
+
+    const I = ambient + albedo * d
 
     return [
-        color[0] * (ambient + albedo * dot),
-        color[1] * (ambient + albedo * dot),
-        color[2] * (ambient + albedo * dot),
-        color[3]
+        color[0] * I,
+        color[1] * I,
+        color[2] * I,
+        color[3],
     ]
 }
 
@@ -54,4 +78,33 @@ export class LambertShader implements Shader {
         const c = lambert(viewPos, viewLight, color, ambient, albedo)
         return packRGBA(c)
     }
+}
+
+function lambert(
+    viewPos: Vec3[],
+    viewLight: Vec4,
+    color: RGBA,
+    ambient: number,
+    albedo: number,
+): RGBA {
+    const centroid = averageVec3(viewPos[0], viewPos[1], viewPos[2])
+    const N = normalize(normalVec3(viewPos[0], viewPos[1], viewPos[2]))
+    const L: Vec3 = normalize([
+        viewLight[0] - centroid[0],
+        viewLight[1] - centroid[1],
+        viewLight[2] - centroid[2],
+    ])
+
+    // diffuse between [0,1]
+    const d = Math.max(0, dot3(N, L))
+
+    // intensity
+    const I = ambient + albedo * d
+
+    return [
+        color[0] * I,
+        color[1] * I,
+        color[2] * I,
+        color[3]
+    ]
 }
