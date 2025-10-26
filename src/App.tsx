@@ -1,7 +1,8 @@
 import { useRef, useEffect, useState } from 'react'
 import { Box, Sphere, Camera } from "./classes"
 import { attachKeyboardControls } from './controls'
-import { packRGBA } from './helpers'
+import { createViewFPS, mat4MulVec } from './helpers'
+import type { Vec4, Mat4x4 } from './helpers'
 
 function App() {
     const cvsRef = useRef<HTMLCanvasElement | null>(null)
@@ -48,6 +49,10 @@ function App() {
         const sphere = new Sphere(150, 30)
 
         const cam = new Camera([0, 0, 750], 0, 0)
+        const light: Vec4 = [0, 400, 0, 1]
+
+        const AMBIENT = 0.1
+        const ALBEDO = 0.4
 
         let controller = attachKeyboardControls(cam)
         let last = performance.now()
@@ -68,14 +73,16 @@ function App() {
             rect.projectToScreen([0, 0, 0, 1], cam, CW, CH)
             sphere.projectToScreen([300, 0, 0, 1], cam, CW, CH)
 
-            const blue = packRGBA(0, 0, 255)
-            const red = packRGBA(255, 0, 0)
-            const green = packRGBA(0, 255, 0)
+            const red: Vec4 = [255, 0, 0, 255]
+            const green: Vec4 = [0, 255, 0, 255]
+            const blue: Vec4 = [0, 0, 255, 255]
 
-            cube.drawSolidToImage(blue, img32, depth, CW, CH)
-            rect.drawSolidToImage(red, img32, depth, CW, CH)
-            sphere.drawSolidToImage(green, img32, depth, CW, CH)
+            const V: Mat4x4 = createViewFPS(cam)
+            const viewLight: Vec4 = mat4MulVec(V, light)
 
+            cube.drawSolidToImage(blue, img32, depth, CW, CH, viewLight, AMBIENT, ALBEDO)
+            rect.drawSolidToImage(red, img32, depth, CW, CH, viewLight, AMBIENT, ALBEDO)
+            sphere.drawSolidToImage(green, img32, depth, CW, CH, viewLight, AMBIENT, ALBEDO)
 
             // draw everything in one call
             ctx.putImageData(img, 0, 0)

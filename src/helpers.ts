@@ -8,6 +8,57 @@ export function clipped(p: Vec4) {
     return (w <= 1e-6) || x < -w || x > w || y < -w || y > w || z < -w || z > w
 }
 
+export function lambert(
+    viewPos: Vec3[],
+    viewLight: Vec4,
+    color: Vec4,
+    ambient: number, // ambient light
+    albedo: number, // surface reflectiveness
+): Vec4 {
+    const centroid = averageVec3(viewPos[0], viewPos[1], viewPos[2])
+    const N = normalVec3(viewPos[0], viewPos[1], viewPos[2])
+    const L: Vec3 = [
+        viewLight[0] - centroid[0],
+        viewLight[1] - centroid[1],
+        viewLight[2] - centroid[2],
+    ]
+
+    // normalize to get dot [0,1]
+    const Nn = normalize(N)
+    const Ln = normalize(L)
+    const dot = Math.max(0, dot3(Nn, Ln))
+
+    return [
+        color[0] * (ambient + albedo * dot),
+        color[1] * (ambient + albedo * dot),
+        color[2] * (ambient + albedo * dot),
+        color[3]
+    ]
+}
+
+function normalize(v: Vec3): Vec3 {
+    const len = Math.hypot(v[0], v[1], v[2])
+    return len === 0 ? [0, 0, 0] : [v[0] / len, v[1] / len, v[2] / len]
+}
+
+function normalVec3(a: Vec3, b: Vec3, c: Vec3): Vec3 {
+    const u: Vec3 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]
+    const v: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
+    return [
+        u[1] * v[2] - u[2] * v[1],
+        u[2] * v[0] - u[0] * v[2],
+        u[0] * v[1] - u[1] * v[0],
+    ]
+}
+
+function averageVec3(a: Vec3, b: Vec3, c: Vec3): Vec3 {
+    return [
+        (a[0] + b[0] + c[0]) / 3,
+        (a[1] + b[1] + c[1]) / 3,
+        (a[2] + b[2] + c[2]) / 3,
+    ]
+}
+
 export const packRGBA = (r: number, g: number, b: number, a = 255) =>
     (a << 24) | (b << 16) | (g << 8) | r
 

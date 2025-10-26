@@ -1,4 +1,4 @@
-import { clipped, drawTriZToImage, createViewFPS, createPerspective, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul } from "./helpers"
+import { lambert, clipped, drawTriZToImage, createViewFPS, createPerspective, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul, packRGBA } from "./helpers"
 import type { Vec3, Vec4, Mat4x4 } from "./helpers"
 
 export class Vertex {
@@ -30,6 +30,7 @@ export class Mesh {
     triangles: Vec3[] = []
     rotX = 0; rotY = 0; rotZ = 0
     pixels: Vec3[] = [] // onscreen points xy + depth, later add colour
+    viewPos: Vec3[] = [] // xyz in view space
 
     rotate(x: number, y: number, z: number): void {
         this.rotX += x; this.rotY += y; this.rotZ += z
@@ -41,6 +42,8 @@ export class Mesh {
         CW: number, CH: number,
     ): void {
         this.pixels = []
+        this.viewPos = []
+
         const T: Mat4x4 = [
             [1, 0, 0, worldPos[0]],
             [0, 1, 0, worldPos[1]],
@@ -60,8 +63,6 @@ export class Mesh {
         // lighting done in view space
 
         for (let v of this.vertices) {
-            // TODO: should compute per-vertex normals for lighting
-
             // model->world->view->clip
             const p = mat4MulVec(MVP, [v.x, v.y, v.z, 1])
             const w = p[3]
@@ -69,6 +70,7 @@ export class Mesh {
             const clip = clipped(p)
             if (clip) {
                 this.pixels.push([Infinity, Infinity, Infinity])
+                this.viewPos.push([Infinity, Infinity, Infinity])
                 continue
             }
 
@@ -83,25 +85,31 @@ export class Mesh {
             const sx = (ndcX * 0.5 + 0.5) * CW
             const sy = (-ndcY * 0.5 + 0.5) * CH // flip y, top left origin
 
-            // store z in view space for depth
+            // calculate view space positions
             const vpos = mat4MulVec(MV, [v.x, v.y, v.z, 1])
-            const zView = vpos[2]
 
-            this.pixels.push([sx, sy, zView])
+            this.pixels.push([sx, sy, vpos[2]]) // store z for depth buffer
+            this.viewPos.push([vpos[0], vpos[1], vpos[2]])
         }
     }
 
     drawSolidToImage(
-        color32: number,
-        img32: Uint32Array, depth: Float32Array, W: number, H: number
+        color: Vec4,
+        img32: Uint32Array, depth: Float32Array, W: number, H: number,
+        viewLight: Vec4,
+        ambient: number,
+        albedo: number,
     ) {
         for (const t of this.triangles) {
-            const p1 = this.pixels[t[0]]
-            const p2 = this.pixels[t[1]]
-            const p3 = this.pixels[t[2]]
-
+            const p1 = this.pixels[t[0]]; const p2 = this.pixels[t[1]]; const p3 = this.pixels[t[2]]
             // skip if clipped
             if (!Number.isFinite(p1[0]) || !Number.isFinite(p2[0]) || !Number.isFinite(p3[0])) continue
+
+            // apply shading
+            const v1 = this.viewPos[t[0]]; const v2 = this.viewPos[t[1]]; const v3 = this.viewPos[t[2]]
+
+            const colorRGBA = lambert([v1, v2, v3], viewLight, color, ambient, albedo)
+            const color32 = packRGBA(...colorRGBA)
 
             drawTriZToImage(img32, depth, W, H, p1, p2, p3, color32)
         }
@@ -124,17 +132,17 @@ export class Box extends Mesh {
 
         this.triangles = [
             // back  (-z)
-            [1, 0, 3], [1, 3, 2],
+            [1, 3, 0], [1, 2, 3],
             // front (+z)
-            [4, 5, 6], [4, 6, 7],
+            [4, 6, 5], [4, 7, 6],
             // left  (-x)
-            [0, 4, 7], [0, 7, 3],
+            [0, 7, 4], [0, 3, 7],
             // right (+x)
-            [5, 1, 2], [5, 2, 6],
+            [5, 2, 1], [5, 6, 2],
             // top   (+y)
-            [3, 7, 6], [3, 6, 2],
+            [3, 6, 7], [3, 2, 6],
             // bot   (-y)
-            [0, 1, 5], [0, 5, 4],
+            [0, 5, 1], [0, 4, 5],
         ]
     }
 }
