@@ -1,5 +1,6 @@
-import { lambert, clipped, drawTriZToImage, createViewFPS, createPerspective, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul, packRGBA } from "./helpers"
-import type { Vec3, Vec4, Mat4x4 } from "./helpers"
+import { clipped, rasterizeTriangle, createViewFPS, createPerspective, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul } from "./helpers"
+import type { Vec3, Vec4, Mat4x4, Color32, RGBA } from "./helpers"
+import type { Shader } from "./shaders";
 
 export class Vertex {
     x: number = 0; y: number = 0; z: number = 0
@@ -94,24 +95,38 @@ export class Mesh {
     }
 
     drawSolidToImage(
-        color: Vec4,
+        color: RGBA,
         img32: Uint32Array, depth: Float32Array, W: number, H: number,
         viewLight: Vec4,
         ambient: number,
         albedo: number,
+        shader: Shader,
     ) {
         for (const t of this.triangles) {
             const p1 = this.pixels[t[0]]; const p2 = this.pixels[t[1]]; const p3 = this.pixels[t[2]]
             // skip if clipped
             if (!Number.isFinite(p1[0]) || !Number.isFinite(p2[0]) || !Number.isFinite(p3[0])) continue
 
-            // apply shading
             const v1 = this.viewPos[t[0]]; const v2 = this.viewPos[t[1]]; const v3 = this.viewPos[t[2]]
 
-            const colorRGBA = lambert([v1, v2, v3], viewLight, color, ambient, albedo)
-            const color32 = packRGBA(...colorRGBA)
+            // Use pixel or flat shading automatically
+            if (shader.shadePixel) {
+                const getColor = (l0: number, l1: number, l2: number): Color32 => {
+                    return shader.shadePixel!(
+                        [v1, v2, v3], // vertex view pos
+                        [l0, l1, l2], // barycentric weights
+                        viewLight,
+                        color,
+                        ambient,
+                        albedo,
+                    )
+                }
+                rasterizeTriangle(img32, depth, W, H, p1, p2, p3, getColor)
+            } else if (shader.shadeFlat) {
+                const color32: Color32 = shader.shadeFlat([v1, v2, v3], viewLight, color, ambient, albedo)
+                rasterizeTriangle(img32, depth, W, H, p1, p2, p3, color32)
+            }
 
-            drawTriZToImage(img32, depth, W, H, p1, p2, p3, color32)
         }
     }
 }

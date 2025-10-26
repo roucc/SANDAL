@@ -8,40 +8,15 @@ export function clipped(p: Vec4) {
     return (w <= 1e-6) || x < -w || x > w || y < -w || y > w || z < -w || z > w
 }
 
-export function lambert(
-    viewPos: Vec3[],
-    viewLight: Vec4,
-    color: Vec4,
-    ambient: number, // ambient light
-    albedo: number, // surface reflectiveness
-): Vec4 {
-    const centroid = averageVec3(viewPos[0], viewPos[1], viewPos[2])
-    const N = normalVec3(viewPos[0], viewPos[1], viewPos[2])
-    const L: Vec3 = [
-        viewLight[0] - centroid[0],
-        viewLight[1] - centroid[1],
-        viewLight[2] - centroid[2],
-    ]
+export type RGBA = [number, number, number, number]
+export type Color32 = number // packed uint32 RGBA
 
-    // normalize to get dot [0,1]
-    const Nn = normalize(N)
-    const Ln = normalize(L)
-    const dot = Math.max(0, dot3(Nn, Ln))
-
-    return [
-        color[0] * (ambient + albedo * dot),
-        color[1] * (ambient + albedo * dot),
-        color[2] * (ambient + albedo * dot),
-        color[3]
-    ]
-}
-
-function normalize(v: Vec3): Vec3 {
+export function normalize(v: Vec3): Vec3 {
     const len = Math.hypot(v[0], v[1], v[2])
     return len === 0 ? [0, 0, 0] : [v[0] / len, v[1] / len, v[2] / len]
 }
 
-function normalVec3(a: Vec3, b: Vec3, c: Vec3): Vec3 {
+export function normalVec3(a: Vec3, b: Vec3, c: Vec3): Vec3 {
     const u: Vec3 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]
     const v: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
     return [
@@ -51,7 +26,7 @@ function normalVec3(a: Vec3, b: Vec3, c: Vec3): Vec3 {
     ]
 }
 
-function averageVec3(a: Vec3, b: Vec3, c: Vec3): Vec3 {
+export function averageVec3(a: Vec3, b: Vec3, c: Vec3): Vec3 {
     return [
         (a[0] + b[0] + c[0]) / 3,
         (a[1] + b[1] + c[1]) / 3,
@@ -59,19 +34,18 @@ function averageVec3(a: Vec3, b: Vec3, c: Vec3): Vec3 {
     ]
 }
 
-export const packRGBA = (r: number, g: number, b: number, a = 255) =>
-    (a << 24) | (b << 16) | (g << 8) | r
+export const packRGBA = ([r, g, b, a = 255]: RGBA): Color32 =>
+    ((a & 0xFF) << 24) | ((b & 0xFF) << 16) | ((g & 0xFF) << 8) | (r & 0xFF)
 
-// test whether a pixel is in a triangle
-const edge = (ax: number, ay: number, bx: number, by: number, px: number, py: number) =>
-    (px - ax) * (by - ay) - (py - ay) * (bx - ax)
-
-export function drawTriZToImage(
+export function rasterizeTriangle(
     img32: Uint32Array, depth: Float32Array, W: number, H: number,
-    a: Vec3, b: Vec3, c: Vec3, color32: number
+    a: Vec3, b: Vec3, c: Vec3,
+    getColor: ((l0: number, l1: number, l2: number) => number) | number // callback or single colour
 ) {
     // back-face culling in screen space
     const FRONT_CCW = false // counter clockwise winding
+    const edge = (ax: number, ay: number, bx: number, by: number, px: number, py: number) =>
+        (px - ax) * (by - ay) - (py - ay) * (bx - ax)
     const area = edge(a[0], a[1], b[0], b[1], c[0], c[1])
     if ((FRONT_CCW && area <= 0) || (!FRONT_CCW && area >= 0)) return
 
@@ -95,7 +69,9 @@ export function drawTriZToImage(
                 const idx = y * W + x
                 if (z < depth[idx]) {
                     depth[idx] = z
-                    img32[idx] = color32
+                    img32[idx] = typeof getColor === "function"
+                        ? getColor(l0, l1, l2) // per pixel shading
+                        : getColor // flat shading
                 }
             }
         }

@@ -2,7 +2,8 @@ import { useRef, useEffect, useState } from 'react'
 import { Box, Sphere, Camera } from "./classes"
 import { attachKeyboardControls } from './controls'
 import { createViewFPS, mat4MulVec } from './helpers'
-import type { Vec4, Mat4x4 } from './helpers'
+import type { Vec4, Mat4x4, RGBA } from './helpers'
+import { LambertShader } from './shaders'
 
 function App() {
     const cvsRef = useRef<HTMLCanvasElement | null>(null)
@@ -53,6 +54,7 @@ function App() {
 
         const AMBIENT = 0.1
         const ALBEDO = 0.4
+        const lambertShader = new LambertShader()
 
         let controller = attachKeyboardControls(cam)
         let last = performance.now()
@@ -73,16 +75,16 @@ function App() {
             rect.projectToScreen([0, 0, 0, 1], cam, CW, CH)
             sphere.projectToScreen([300, 0, 0, 1], cam, CW, CH)
 
-            const red: Vec4 = [255, 0, 0, 255]
-            const green: Vec4 = [0, 255, 0, 255]
-            const blue: Vec4 = [0, 0, 255, 255]
+            const red: RGBA = [255, 0, 0, 255]
+            const green: RGBA = [0, 255, 0, 255]
+            const blue: RGBA = [0, 0, 255, 255]
 
             const V: Mat4x4 = createViewFPS(cam)
             const viewLight: Vec4 = mat4MulVec(V, light)
 
-            cube.drawSolidToImage(blue, img32, depth, CW, CH, viewLight, AMBIENT, ALBEDO)
-            rect.drawSolidToImage(red, img32, depth, CW, CH, viewLight, AMBIENT, ALBEDO)
-            sphere.drawSolidToImage(green, img32, depth, CW, CH, viewLight, AMBIENT, ALBEDO)
+            cube.drawSolidToImage(blue, img32, depth, CW, CH, viewLight, AMBIENT, ALBEDO, lambertShader)
+            rect.drawSolidToImage(red, img32, depth, CW, CH, viewLight, AMBIENT, ALBEDO, lambertShader)
+            sphere.drawSolidToImage(green, img32, depth, CW, CH, viewLight, AMBIENT, ALBEDO, lambertShader)
 
             // draw everything in one call
             ctx.putImageData(img, 0, 0)
