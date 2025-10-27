@@ -1,9 +1,9 @@
 import { useRef, useEffect, useState } from 'react'
-import { Box, Sphere, Camera, Tetrahedron } from "./classes"
+import { Sphere, Camera } from "./classes"
 import { attachKeyboardControls } from './controls'
 import { createViewFPS, mat4MulVec } from './helpers'
 import type { Vec4, Mat4x4, RGBA } from './helpers'
-import { LambertShader, GouraudShader } from './shaders'
+import { GouraudShader } from './shaders'
 
 function App() {
     const cvsRef = useRef<HTMLCanvasElement | null>(null)
@@ -48,26 +48,13 @@ function App() {
         window.addEventListener("resize", resize)
 
         // setup scene
-        const cube = new Box(100, 100, 100)
-        const rect = new Box(50, 100, 150)
-        const sphere = new Sphere(150, 50)
-        const sphere2 = new Sphere(25, 20)
-        const tetra = new Tetrahedron(150)
-
+        const sphere = new Sphere(150, 25)
         const cam = new Camera([0, 0, 750], 0, 0)
 
-        // build normals
-        cube.buildVertexNormals()
-        rect.buildVertexNormals()
-        sphere.buildVertexNormals()
-        sphere2.buildVertexNormals()
-        tetra.buildVertexNormals()
-
         // lighting
-        const light: Vec4 = [0, 400, 0, 1]
+        const light: Vec4 = [300, 300, 300, 1]
         const AMBIENT = 0.1
-        const ALBEDO = 0.4
-        const lambertShader = new LambertShader()
+        const ALBEDO = 0.6
         const gouraudShader = new GouraudShader()
 
         let controller = attachKeyboardControls(cam)
@@ -80,33 +67,12 @@ function App() {
             last = now
             controller.update(dt)
 
-            // rotate
-            cube.rotate(0.01, 0.02, 0.05)
-            rect.rotate(0.001, 0.001, 0)
-            sphere.rotate(0.005, 0, 0)
-            tetra.rotate(0.1, 0.1, 0.1)
-
-            cube.projectToScreen([-300, 0, 0, 1], cam, CW, CH)
-            rect.projectToScreen([0, 0, 0, 1], cam, CW, CH)
-            sphere.projectToScreen([300, 0, 0, 1], cam, CW, CH)
-            sphere2.projectToScreen([100, 0, 0, 1], cam, CW, CH)
-            tetra.projectToScreen([-200, 0, -400, 1], cam, CW, CH)
-
-            const red: RGBA = [255, 0, 0, 255]
-            const green: RGBA = [0, 255, 0, 255]
-            const blue: RGBA = [0, 0, 255, 255]
-            const magenta: RGBA = [255, 0, 255, 255]
-            const teal: RGBA = [0, 255, 255, 255]
-
             const V: Mat4x4 = createViewFPS(cam)
             const viewLight: Vec4 = mat4MulVec(V, light)
 
-            cube.drawSolidToImage(blue, img32, depth, CW, CH, viewLight, AMBIENT, ALBEDO, gouraudShader)
-            rect.drawSolidToImage(red, img32, depth, CW, CH, viewLight, AMBIENT, ALBEDO, gouraudShader)
-            // achieve similar results with high poly lambert / small low poly gouraud
-            sphere.drawSolidToImage(green, img32, depth, CW, CH, viewLight, AMBIENT, ALBEDO, lambertShader)
-            sphere2.drawSolidToImage(magenta, img32, depth, CW, CH, viewLight, AMBIENT, ALBEDO, gouraudShader)
-            tetra.drawSolidToImage(teal, img32, depth, CW, CH, viewLight, 0.05, 1, gouraudShader)
+            sphere.projectToScreen([0, 0, 0, 1], cam, CW, CH, viewLight, AMBIENT, ALBEDO)
+            const teal: RGBA = [0, 255, 255, 255]
+            sphere.drawSolidToImage(teal, img32, depth, CW, CH, gouraudShader)
 
             // draw everything in one call
             ctx.putImageData(img, 0, 0)

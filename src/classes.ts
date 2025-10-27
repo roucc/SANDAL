@@ -1,4 +1,4 @@
-import { clipped, rasterizeTriangle, createViewFPS, normalize, createPerspective, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul } from "./helpers"
+import { dot3, clipped, rasterizeTriangle, createViewFPS, normalize, createPerspective, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul } from "./helpers"
 import type { Vec3, Vec4, Mat4x4, Color32, RGBA } from "./helpers"
 import type { Shader } from "./shaders"
 
@@ -34,6 +34,7 @@ export class Mesh {
     viewPos: Vec3[] = [] // xyz in view space
     normals: Vec3[] = [] // model space vertex normals
     viewNorms: Vec3[] = [] // view space vertex normals
+    vertI: Float32Array = new Float32Array(0)
 
     rotate(x: number, y: number, z: number): void {
         this.rotX += x; this.rotY += y; this.rotZ += z
@@ -64,10 +65,14 @@ export class Mesh {
         worldPos: Vec4 = [0, 0, 0, 1],
         cam: Camera,
         CW: number, CH: number,
+        viewLight: Vec4,
+        ambient: number,
+        albedo: number,
     ): void {
         this.pixels = []
         this.viewPos = []
         this.viewNorms = []
+        this.vertI = new Float32Array(this.vertices.length)
 
         const T: Mat4x4 = [
             [1, 0, 0, worldPos[0]],
@@ -121,17 +126,20 @@ export class Mesh {
             this.viewPos.push([vpos[0], vpos[1], vpos[2]])
 
             const n = this.normals[i]
-            const vn = mat4MulVec(MV, [n[0], n[1], n[2], 0]) // view normal (w=0)
-            this.viewNorms.push(normalize([vn[0], vn[1], vn[2]]))
+            const vn4 = mat4MulVec(MV, [n[0], n[1], n[2], 0]) // view normal (w=0)
+            const vn = normalize([vn4[0], vn4[1], vn4[2]])
+            this.viewNorms.push(vn)
+
+            // static light direction
+            const L = normalize([-viewLight[0] + vpos[0], -viewLight[1] + vpos[1], -viewLight[2] + vpos[2]])
+            const D = Math.max(0, dot3(vn, L))
+            this.vertI[i] = ambient + albedo * D
         }
     }
 
     drawSolidToImage(
         color: RGBA,
         img32: Uint32Array, depth: Float32Array, W: number, H: number,
-        viewLight: Vec4,
-        ambient: number,
-        albedo: number,
         shader: Shader,
     ) {
         for (const t of this.triangles) {
@@ -140,25 +148,18 @@ export class Mesh {
             // skip if clipped
             if (!Number.isFinite(p1[0]) || !Number.isFinite(p2[0]) || !Number.isFinite(p3[0])) continue
 
-            const v1 = this.viewPos[t[0]]; const v2 = this.viewPos[t[1]]; const v3 = this.viewPos[t[2]]
+            const I0 = this.vertI[t[0]], I1 = this.vertI[t[1]], I2 = this.vertI[t[2]]
 
             // Use pixel or flat shading automatically
             if (shader.shadePixel) {
                 if (!n1 || !n2 || !n3) continue
                 const getColor = (l0: number, l1: number, l2: number): Color32 => {
-                    return shader.shadePixel!(
-                        [v1, v2, v3], // vertex view pos
-                        [l0, l1, l2], // barycentric weights
-                        viewLight,
-                        color,
-                        ambient,
-                        albedo,
-                        [n1, n2, n3],
-                    )
+                    return shader.shadePixel!([l0, l1, l2], [I0, I1, I2], color)
                 }
                 rasterizeTriangle(img32, depth, W, H, p1, p2, p3, getColor)
             } else if (shader.shadeFlat) {
-                const color32: Color32 = shader.shadeFlat([v1, v2, v3], viewLight, color, ambient, albedo)
+                const flat = (I0 + I1 + I2) / 3
+                const color32: Color32 = shader.shadeFlat(flat, color)
                 rasterizeTriangle(img32, depth, W, H, p1, p2, p3, color32)
             }
 
@@ -194,6 +195,8 @@ export class Box extends Mesh {
             // bot   (-y)
             [0, 5, 1], [0, 4, 5],
         ]
+
+        this.buildVertexNormals()
     }
 }
 
@@ -222,6 +225,8 @@ export class Sphere extends Mesh {
                 this.triangles.push([a, b, d], [a, d, c])
             }
         }
+
+        this.normals = this.vertices.map(v => normalize([-v.x, -v.y, -v.z]))
     }
 }
 
@@ -243,5 +248,7 @@ export class Tetrahedron extends Mesh {
             [0, 1, 3],
             [1, 2, 3],
         ]
+
+        this.buildVertexNormals()
     }
 }
