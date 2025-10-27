@@ -30,36 +30,12 @@ export class Mesh {
     vertices: Vertex[] = []
     triangles: Vec3[] = []
     rotX = 0; rotY = 0; rotZ = 0
-    pixels: Vec3[] = [] // onscreen points xy + depth, later add colour
-    viewPos: Vec3[] = [] // xyz in view space
+    screen: Float32Array = new Float32Array(0) // onscreen points xy + depth
+    clipMask: Uint8Array = new Uint8Array(0) // 1 = clipped, 0 = valid
+    viewPos: Float32Array = new Float32Array(0) // xyz in view space
     normals: Vec3[] = [] // model space vertex normals
-    viewNorms: Vec3[] = [] // view space vertex normals
+    viewNorms: Float32Array = new Float32Array(0) // view space vertex normals
     vertI: Float32Array = new Float32Array(0)
-
-    rotate(x: number, y: number, z: number): void {
-        this.rotX += x; this.rotY += y; this.rotZ += z
-    }
-
-    buildVertexNormals() {
-        this.normals = Array(this.vertices.length).fill(0).map(_ => [0, 0, 0] as Vec3)
-        for (const t of this.triangles) {
-            const a = this.vertices[t[0]], b = this.vertices[t[1]], c = this.vertices[t[2]]
-            const ab: Vec3 = [b.x - a.x, b.y - a.y, b.z - a.z]
-            const ac: Vec3 = [c.x - a.x, c.y - a.y, c.z - a.z]
-
-            const n: Vec3 = [
-                ab[1] * ac[2] - ab[2] * ac[1],
-                ab[2] * ac[0] - ab[0] * ac[2],
-                ab[0] * ac[1] - ab[1] * ac[0],
-            ]
-            for (const i of t) {
-                this.normals[i][0] += n[0]
-                this.normals[i][1] += n[1]
-                this.normals[i][2] += n[2]
-            }
-        }
-        this.normals = this.normals.map(n => normalize(n))
-    }
 
     projectToScreen(
         worldPos: Vec4 = [0, 0, 0, 1],
@@ -69,10 +45,11 @@ export class Mesh {
         ambient: number,
         albedo: number,
     ): void {
-        this.pixels = []
-        this.viewPos = []
-        this.viewNorms = []
-        this.vertI = new Float32Array(this.vertices.length)
+        const n = this.vertices.length
+        this.screen = new Float32Array(n * 3)
+        this.clipMask = new Uint8Array(n)
+        this.viewNorms = new Float32Array(n * 3)
+        this.vertI = new Float32Array(n)
 
         const T: Mat4x4 = [
             [1, 0, 0, worldPos[0]],
@@ -101,11 +78,10 @@ export class Mesh {
 
             const clip = clipped(p)
             if (clip) {
-                this.pixels.push([Infinity, Infinity, Infinity])
-                this.viewPos.push([Infinity, Infinity, Infinity])
-                this.viewNorms.push([0, 0, 0])
+                this.clipMask[i] = 1
                 continue
             }
+            this.clipMask[i] = 0
 
             // clip->normalized device coordinates
             // perspective divide (x,y,z) / w
@@ -122,13 +98,15 @@ export class Mesh {
             // calculate view space positions
             const vpos = mat4MulVec(MV, [v.x, v.y, v.z, 1])
 
-            this.pixels.push([sx, sy, ndcZ]) // store z for depth buffer
-            this.viewPos.push([vpos[0], vpos[1], vpos[2]])
+            const o = i * 3
+            this.screen[o + 0] = sx; this.screen[o + 1] = sy; this.screen[o + 2] = ndcZ
+
+            this.viewPos[o + 0] = vpos[0]; this.viewPos[o + 1] = vpos[1]; this.viewPos[o + 2] = vpos[2]
 
             const n = this.normals[i]
             const vn4 = mat4MulVec(MV, [n[0], n[1], n[2], 0]) // view normal (w=0)
             const vn = normalize([vn4[0], vn4[1], vn4[2]])
-            this.viewNorms.push(vn)
+            this.viewNorms[o + 0] = vn[0]; this.viewNorms[o + 1] = vn[1]; this.viewNorms[o + 2] = vn[2]
 
             // static light direction
             const L = normalize([-viewLight[0] + vpos[0], -viewLight[1] + vpos[1], -viewLight[2] + vpos[2]])
@@ -143,18 +121,26 @@ export class Mesh {
         shader: Shader,
     ) {
         for (const t of this.triangles) {
-            const n1 = this.viewNorms[t[0]], n2 = this.viewNorms[t[1]], n3 = this.viewNorms[t[2]]
-            const p1 = this.pixels[t[0]]; const p2 = this.pixels[t[1]]; const p3 = this.pixels[t[2]]
-            // skip if clipped
-            if (!Number.isFinite(p1[0]) || !Number.isFinite(p2[0]) || !Number.isFinite(p3[0])) continue
+            const i0 = t[0], i1 = t[1], i2 = t[2]
+            if (this.clipMask[i0] | this.clipMask[i1] | this.clipMask[i2]) continue // skip if clipped
 
-            const I0 = this.vertI[t[0]], I1 = this.vertI[t[1]], I2 = this.vertI[t[2]]
+            const o0 = i0 * 3, o1 = i1 * 3, o2 = i2 * 3;
+            const x0 = this.screen[o0], y0 = this.screen[o0 + 1], z0 = this.screen[o0 + 2]
+            const x1 = this.screen[o1], y1 = this.screen[o1 + 1], z1 = this.screen[o1 + 2]
+            const x2 = this.screen[o2], y2 = this.screen[o2 + 1], z2 = this.screen[o2 + 2]
+
+            // intensities per vertex
+            const I0 = this.vertI[i0], I1 = this.vertI[i1], I2 = this.vertI[i2]
+
+            // would be better for rasterizeTriangle to take individually
+            const p1: [number, number, number] = [x0, y0, z0];
+            const p2: [number, number, number] = [x1, y1, z1];
+            const p3: [number, number, number] = [x2, y2, z2];
 
             // Use pixel or flat shading automatically
             if (shader.shadePixel) {
-                if (!n1 || !n2 || !n3) continue
-                const getColor = (l0: number, l1: number, l2: number): Color32 => {
-                    return shader.shadePixel!([l0, l1, l2], [I0, I1, I2], color)
+                const getColor = (b0: number, b1: number, b2: number): Color32 => {
+                    return shader.shadePixel!([b0, b1, b2], [I0, I1, I2], color)
                 }
                 rasterizeTriangle(img32, depth, W, H, p1, p2, p3, getColor)
             } else if (shader.shadeFlat) {
@@ -164,6 +150,31 @@ export class Mesh {
             }
 
         }
+    }
+
+    rotate(x: number, y: number, z: number): void {
+        this.rotX += x; this.rotY += y; this.rotZ += z
+    }
+
+    buildVertexNormals() {
+        this.normals = Array(this.vertices.length).fill(0).map(_ => [0, 0, 0] as Vec3)
+        for (const t of this.triangles) {
+            const a = this.vertices[t[0]], b = this.vertices[t[1]], c = this.vertices[t[2]]
+            const ab: Vec3 = [b.x - a.x, b.y - a.y, b.z - a.z]
+            const ac: Vec3 = [c.x - a.x, c.y - a.y, c.z - a.z]
+
+            const n: Vec3 = [
+                ab[1] * ac[2] - ab[2] * ac[1],
+                ab[2] * ac[0] - ab[0] * ac[2],
+                ab[0] * ac[1] - ab[1] * ac[0],
+            ]
+            for (const i of t) {
+                this.normals[i][0] += n[0]
+                this.normals[i][1] += n[1]
+                this.normals[i][2] += n[2]
+            }
+        }
+        this.normals = this.normals.map(n => normalize(n))
     }
 }
 

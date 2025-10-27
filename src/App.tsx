@@ -48,7 +48,7 @@ function App() {
         window.addEventListener("resize", resize)
 
         // setup scene
-        const sphere = new Sphere(150, 25)
+        const sphere = new Sphere(150, 100)
         const cam = new Camera([0, 0, 750], 0, 0)
 
         // lighting
