@@ -63,7 +63,7 @@ function gouraud(
     // apply weighting to each diffuse
     const d = bary[0] * D0 + bary[1] * D1 + bary[2] * D2
 
-    const I = ambient + albedo * d
+    const I = Math.min(1, Math.max(0, ambient + albedo * d))
 
     return [
         color[0] * I,
@@ -99,7 +99,7 @@ function lambert(
     const d = Math.max(0, dot3(N, L))
 
     // intensity
-    const I = ambient + albedo * d
+    const I = Math.min(1, Math.max(0, ambient + albedo * d))
 
     return [
         color[0] * I,

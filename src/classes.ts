@@ -1,6 +1,6 @@
 import { clipped, rasterizeTriangle, createViewFPS, normalize, createPerspective, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul } from "./helpers"
 import type { Vec3, Vec4, Mat4x4, Color32, RGBA } from "./helpers"
-import type { Shader } from "./shaders";
+import type { Shader } from "./shaders"
 
 export class Vertex {
     x: number = 0; y: number = 0; z: number = 0
@@ -201,12 +201,10 @@ export class Sphere extends Mesh {
     constructor(radius = 150, segments = 20) {
         super()
 
-        // calculate vertex positions
         for (let i = 0; i <= segments; i++) {
             const theta = i * Math.PI / segments
-            for (let j = 0; j <= segments; j++) {
+            for (let j = 0; j < segments; j++) {
                 const phi = j * 2 * Math.PI / segments
-
                 const x = radius * Math.sin(theta) * Math.cos(phi)
                 const y = radius * Math.sin(theta) * Math.sin(phi)
                 const z = radius * Math.cos(theta)
@@ -214,16 +212,14 @@ export class Sphere extends Mesh {
             }
         }
 
-        // create sphere triangles
-        const pointsPerRow = segments + 1
+        const cols = segments
         for (let i = 0; i < segments; i++) {
             for (let j = 0; j < segments; j++) {
-                const a = i * pointsPerRow + j
-                const b = a + 1
-                const c = a + pointsPerRow
-                const d = c + 1
-                this.triangles.push([a, b, d])
-                this.triangles.push([a, d, c])
+                const a = i * cols + j
+                const b = i * cols + ((j + 1) % cols)
+                const c = (i + 1) * cols + j
+                const d = (i + 1) * cols + ((j + 1) % cols)
+                this.triangles.push([a, b, d], [a, d, c])
             }
         }
     }
