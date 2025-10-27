@@ -228,3 +228,24 @@ export class Sphere extends Mesh {
         }
     }
 }
+
+export class Tetrahedron extends Mesh {
+    constructor(size = 100) {
+        super()
+        const s = size / 2
+
+        this.vertices = [
+            new Vertex(0, s, 0),
+            new Vertex(-s, -s, s),
+            new Vertex(s, -s, s),
+            new Vertex(0, -s, -s),
+        ]
+
+        this.triangles = [
+            [0, 2, 1],
+            [0, 3, 2],
+            [0, 1, 3],
+            [1, 2, 3],
+        ]
+    }
+}
