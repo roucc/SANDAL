@@ -1,9 +1,21 @@
-import { useRef, useEffect, useState } from 'react'
-import { Sphere, Camera } from "./classes"
-import { attachKeyboardControls } from './controls'
-import { createViewFPS, mat4MulVec } from './helpers'
-import type { Vec4, Mat4x4, RGBA } from './helpers'
-import { GouraudShader } from './shaders'
+import { useRef, useEffect, useState } from "react"
+import { Camera } from "./classes"
+import { attachKeyboardControls } from "./controls"
+import { Renderer } from "./renderer"
+import { loadScene } from "./loader"
+import type { SceneDef } from "./loader"
+
+const sceneDef: SceneDef = {
+    camera: { eye: [0, 0, 750], yaw: 0, pitch: 0, fov: 60, near: 0.1, far: 10000 },
+    light: { type: "point", pos: [300, 300, 300, 1] },
+    objects: [
+        {
+            type: "sphere", params: { radius: 150, segments: 25 },
+            transform: { pos: [0, 0, 0], rot: [0, 0, 0] },
+            material: { color: [0, 255, 255, 255], shader: "gouraud", ambient: 0.1, albedo: 0.6 }
+        },
+    ]
+}
 
 function App() {
     const cvsRef = useRef<HTMLCanvasElement | null>(null)
@@ -13,69 +25,29 @@ function App() {
         const cvs = cvsRef.current
         if (!cvs) return
 
-        const ctx = cvs.getContext('2d', {
-            alpha: false,
-            willReadFrequently: true,
-        } as CanvasRenderingContext2DSettings)
-        if (!ctx) return
+        const renderer = new Renderer(cvs)
+        const scene = loadScene(sceneDef)
 
-        let CW = cvs.width
-        let CH = cvs.height
-
-        let depth = new Float32Array(CW * CH)
-        let img = ctx.createImageData(CW, CH)
-        let img32 = new Uint32Array(img.data.buffer)
-
-        const allocBuffers = () => {
-            depth = new Float32Array(CW * CH)
-            img = ctx.createImageData(CW, CH)
-            img32 = new Uint32Array(img.data.buffer)
-        }
-
-        const clearBuffers = () => {
-            depth.fill(Infinity)
-            img32.fill(0xFF000000)
-        }
-
-        const resize = () => {
-            cvs.width = window.innerWidth
-            cvs.height = window.innerHeight
-            CW = cvs.width
-            CH = cvs.height
-            allocBuffers()
-        }
-        resize()
-        window.addEventListener("resize", resize)
-
-        // setup scene
-        const sphere = new Sphere(150, 100)
-        const cam = new Camera([0, 0, 750], 0, 0)
-
-        // lighting
-        const light: Vec4 = [300, 300, 300, 1]
-        const AMBIENT = 0.1
-        const ALBEDO = 0.6
-        const gouraudShader = new GouraudShader()
+        const cam = new Camera(
+            scene.camera.eye,
+            scene.camera.pitch,
+            scene.camera.yaw,
+            scene.camera.fov,
+            scene.camera.near,
+            scene.camera.far
+        )
 
         let controller = attachKeyboardControls(cam)
-        let last = performance.now()
-        const engine = () => {
-            clearBuffers()
 
+        let last = performance.now()
+
+        const loop = () => {
             const now = performance.now()
             const dt = (now - last) / 1000
             last = now
+
             controller.update(dt)
-
-            const V: Mat4x4 = createViewFPS(cam)
-            const viewLight: Vec4 = mat4MulVec(V, light)
-
-            sphere.projectToScreen([0, 0, 0, 1], cam, CW, CH, viewLight, AMBIENT, ALBEDO)
-            const teal: RGBA = [0, 255, 255, 255]
-            sphere.drawSolidToImage(teal, img32, depth, CW, CH, gouraudShader)
-
-            // draw everything in one call
-            ctx.putImageData(img, 0, 0)
+            renderer.drawScene(scene, cam)
 
             setCamInfo({
                 x: cam.eye[0].toFixed(0),
@@ -85,12 +57,11 @@ function App() {
                 pitch: cam.pitch.toFixed(2),
             })
 
-            requestAnimationFrame(engine)
+            requestAnimationFrame(loop)
         }
-        engine()
+        loop()
 
         return () => {
-            window.removeEventListener("resize", resize)
             controller.dispose()
         }
     }, [])
@@ -109,7 +80,8 @@ function App() {
                 fontSize: "14px",
                 borderRadius: "4px"
             }}>
-                x:{camInfo.x} y:{camInfo.y} z:{camInfo.z}<br />
+                x:{camInfo.x} y:{camInfo.y} z:{camInfo.z}
+                <br />
                 yaw:{camInfo.yaw} pitch:{camInfo.pitch}
             </div>
         </>

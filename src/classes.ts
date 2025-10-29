@@ -48,6 +48,7 @@ export class Mesh {
         const n = this.vertices.length
         this.screen = new Float32Array(n * 3)
         this.clipMask = new Uint8Array(n)
+        this.viewPos = new Float32Array(n * 3)
         this.viewNorms = new Float32Array(n * 3)
         this.vertI = new Float32Array(n)
 
