@@ -6,29 +6,37 @@ import { loadScene } from "./loader"
 import type { SceneDef } from "./loader"
 import { loadOBJURL } from "./parse"
 
-// const sceneDef: SceneDef = {
-//     camera: { eye: [0, 0, 750], yaw: 0, pitch: 0, fov: 60, near: 0.1, far: 10000 },
-//     light: { type: "point", pos: [300, 300, 300, 1] },
-//     objects: [
-//         {
-//             type: "sphere", params: { radius: 150, segments: 25 },
-//             transform: { pos: [0, 0, 0], rot: [0, 0, 0] },
-//             material: { color: [0, 255, 255, 255], shader: "gouraud", ambient: 0.1, albedo: 0.6 }
-//         },
-//     ]
-// }
-
-
 const sandal = await loadOBJURL("../models/sandal.obj")
 
 const sceneDef: SceneDef = {
     camera: { eye: [0, 0, 750], yaw: 0, pitch: 0, fov: 60, near: 0.1, far: 10000 },
-    light: { type: "point", pos: [-300, -300, -300, 1] },
+    light: { type: "point", pos: [300, 300, 300, 1] },
     objects: [
         {
             type: "mesh", mesh: sandal,
-            transform: { pos: [0, 0, 0], rot: [0.025, 0.05, 0.04], scale: 15 },
-            material: { color: [255, 255, 255, 255], shader: "gouraud", ambient: 0.1, albedo: 0.6, rainbow: true }
+            transform: { pos: [250, 0, 0], rot: [0.03, 0, 0], scale: 15 },
+            material: { color: [255, 255, 255, 255], shader: "gouraud", ambient: 0.2, albedo: 0.6, rainbow: false }
+
+        },
+        {
+            type: "sphere", params: { radius: 150, segments: 30 },
+            transform: { pos: [250, 0, 0], rot: [0, 0, 0] },
+            material: { color: [0, 255, 255, 255], shader: "gouraud", ambient: 0.1, albedo: 0.6 }
+        },
+        {
+            type: "box",
+            transform: { pos: [-200, 0, 0], rot: [0.02, 0.02, 0.02] },
+            material: { color: [0, 0, 255, 255], shader: "gouraud", ambient: 0.2, albedo: 0.6 }
+        },
+        {
+            type: "sphere", params: { radius: 100, segments: 30 },
+            transform: { pos: [-400, 0, 0], rot: [0, 0, 0] },
+            material: { color: [255, 0, 200, 255], shader: "lambert", ambient: 0.2, albedo: 0.6 }
+        },
+        {
+            type: "tetra",
+            transform: { pos: [500, 0, 0], rot: [0, 0, 0] },
+            material: { color: [255, 0, 0, 255], shader: "gouraud", ambient: 0.2, albedo: 0.6 }
         },
     ]
 }

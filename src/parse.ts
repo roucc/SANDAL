@@ -69,7 +69,7 @@ export function parseOBJToMesh(text: string): Mesh {
     const hasVN = accNorms.some(n => n[0] !== 0 || n[1] !== 0 || n[2] !== 0)
     if (hasVN) {
         mesh.normals = accNorms.map(n => {
-            const m: [number, number, number] = [n[0], n[1], n[2]]
+            const m: [number, number, number] = [-n[0], -n[1], -n[2]]
             normalize(m)
             return m
         })
