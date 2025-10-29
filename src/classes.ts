@@ -1,4 +1,4 @@
-import { dot3, clipped, rasterizeTriangle, createViewFPS, normalize, createPerspective, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul } from "./helpers"
+import { dot3, clipped, rasterizeTriangle, createViewFPS, normalize, createPerspective, mat4MulVec, xMat4, yMat4, zMat4, mat4Mul, sMat4 } from "./helpers"
 import type { Vec3, Vec4, Mat4x4, Color32, RGBA } from "./helpers"
 import type { Shader } from "./shaders"
 
@@ -44,6 +44,7 @@ export class Mesh {
         viewLight: Vec4,
         ambient: number,
         albedo: number,
+        scale: number = 1,
     ): void {
         const n = this.vertices.length
         this.screen = new Float32Array(n * 3)
@@ -52,6 +53,8 @@ export class Mesh {
         this.viewNorms = new Float32Array(n * 3)
         this.vertI = new Float32Array(n)
 
+        const S = sMat4(scale ?? 1)
+        const R = mat4Mul(zMat4(this.rotZ), mat4Mul(yMat4(this.rotY), xMat4(this.rotX)))
         const T: Mat4x4 = [
             [1, 0, 0, worldPos[0]],
             [0, 1, 0, worldPos[1]],
@@ -60,7 +63,7 @@ export class Mesh {
         ]
 
         // model->world coordinates
-        const M = mat4Mul(T, mat4Mul(zMat4(this.rotZ), mat4Mul(yMat4(this.rotY), xMat4(this.rotX))))
+        const M = mat4Mul(T, mat4Mul(R, S))
         // world->view coordinates
         const V = createViewFPS(cam)
         const MV = mat4Mul(V, M)

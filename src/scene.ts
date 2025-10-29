@@ -4,6 +4,7 @@ import type { Mesh } from "./classes"
 export type Transform = {
     pos: Vec3,
     rot: Vec3, // radians
+    scale?: number,
 }
 
 export type Material = {
@@ -11,6 +12,7 @@ export type Material = {
     shader: "gouraud" | "lambert",
     ambient?: number,
     albedo?: number,
+    rainbow?: boolean,
 }
 
 export type Light = {

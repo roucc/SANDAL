@@ -1,8 +1,10 @@
-import { createViewFPS, mat4MulVec } from "./helpers"
+import { createViewFPS, mat4MulVec, hslToRgb } from "./helpers"
 import type { Vec4 } from "./helpers"
 import { Camera } from "./classes"
 import type { Scene } from "./scene"
 import { GouraudShader, LambertShader } from "./shaders"
+
+let hue = 0
 
 export class Renderer {
     cvs: HTMLCanvasElement
@@ -42,16 +44,23 @@ export class Renderer {
 
         for (const e of scene.entities) {
             const pos = e.transform.pos
-            e.mesh.rotX = e.transform.rot[0]
-            e.mesh.rotY = e.transform.rot[1]
-            e.mesh.rotZ = e.transform.rot[2]
+            e.mesh.rotX += e.transform.rot[0]
+            e.mesh.rotY += e.transform.rot[1]
+            e.mesh.rotZ += e.transform.rot[2]
+            const s = e.transform.scale ?? 1
 
             // choose shader
             const shader = e.material.shader === "lambert" ? new LambertShader() : new GouraudShader()
 
+            if (e.material.rainbow) {
+                hue = (hue + 2) % 360
+                const [r, g, b] = hslToRgb(hue / 360, 1, 0.5)
+                e.material.color = [r, g, b, 255]
+            }
+
             // project + shade
             e.mesh.projectToScreen([pos[0], pos[1], pos[2], 1], cam, this.W, this.H, lightView,
-                e.material.ambient!, e.material.albedo!)
+                e.material.ambient!, e.material.albedo!, s)
 
             e.mesh.drawSolidToImage(e.material.color, this.img32, this.depth, this.W, this.H, shader)
         }

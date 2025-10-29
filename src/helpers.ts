@@ -209,3 +209,34 @@ export const zMat4 = (a: number): Mat4x4 => [
     [0, 0, 1, 0],
     [0, 0, 0, 1],
 ]
+
+export function sMat4(s: number): Mat4x4 {
+    return [
+        [s, 0, 0, 0],
+        [0, s, 0, 0],
+        [0, 0, s, 0],
+        [0, 0, 0, 1],
+    ]
+}
+
+export function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+    let r: number = 0, g: number = 0, b: number = 0
+    const i = Math.floor(h * 6)
+    const f = h * 6 - i
+    const p = l * (1 - s)
+    const q = l * (1 - f * s)
+    const t = l * (1 - (1 - f) * s)
+    switch (i % 6) {
+        case 0: r = l; g = t; b = p; break
+        case 1: r = q; g = l; b = p; break
+        case 2: r = p; g = l; b = t; break
+        case 3: r = p; g = q; b = l; break
+        case 4: r = t; g = p; b = l; break
+        case 5: r = l; g = p; b = q; break
+    }
+    return [
+        Math.round(r * 255),
+        Math.round(g * 255),
+        Math.round(b * 255)
+    ];
+}
